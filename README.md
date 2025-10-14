@@ -33,3 +33,5 @@ Herramientas de desarrollo:
   - Spring Framework 6
   - Vaadin 24+
   - Apache Maven
+  - Control de versiones Git
+  - MySQL Workbench
