@@ -2,21 +2,6 @@ Bienvenidos a EasiFood, un software que gestiona e integra haciendo uso de herra
 
 Nuestro objetivo es impulsar el desarrollo de los pequeños negocios de comida rápida ofreciéndoles una herramienta de trabajo que facilite la digitalización y a su vez ofrezca una solución sencilla y eficaz.
 
-Roles del equipo:
-
-    - Jesús Javier Gallego Ibáñez
-      - Product Owner
-      - Programador
-      - Administrador de sistemas
-    - Daniel Egea Garófano
-      - Scrum Master
-      - Programador
-      - Diseñador de interfaz de usuario
-    - Francisco José Navarro Cabillas
-      - Analista
-      - Programador
-      - Tester
-
 Herramientas de comunicación:
 
   - Discord
