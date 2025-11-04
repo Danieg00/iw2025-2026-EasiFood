@@ -1,0 +1,54 @@
+node_modules/
+frontend/generated/
+vite.config.ts
+package-lock.json
+
+HELP.md
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### LOGS ###
+log/
+logs/
+*.log
+
+### OS FILES ###
+.DS_Store
+Thumbs.db
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+# Keep IntelliJ project settings for the team
+# Ignore only personal and cache files
+.idea/shelf/
+.idea/workspace.xml
+.idea/httpRequests/
+.idea/dataSources/
+.idea/dataSources.local.xml
+.idea/sonarlint/
+.idea/assetWizardSettings.xml
+*.iws
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
