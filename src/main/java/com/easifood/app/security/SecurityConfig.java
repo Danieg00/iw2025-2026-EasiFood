@@ -1,47 +1,33 @@
 package com.easifood.app.security;
 
+import com.easifood.app.views.LoginView;
+import com.vaadin.flow.spring.security.VaadinWebSecurity;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
-import org.springframework.security.config.Customizer;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 @Configuration
 @EnableWebSecurity
-public class SecurityConfig {
+public class SecurityConfig extends VaadinWebSecurity {
 
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-                .csrf(csrf -> csrf.disable())
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/VAADIN/**", "/favicon.ico", "/images/**", "/icons/**",
-                                "/manifest.webmanifest", "/sw.js", "/offline.html")
-                        .permitAll()
-                        .anyRequest().authenticated()
-                )
-                // 👉 login por defecto de Spring (el que ya te funcionaba)
-                .formLogin(Customizer.withDefaults())
-                .logout(logout -> logout
-                        .logoutSuccessUrl("/login?logout")
-                );
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        // Configuración por defecto de Vaadin (maneja rutas, /VAADIN/**, etc.)
+        super.configure(http);
 
-        return http.build();
+        // Esta es la vista de login de Vaadin que ya tienes (@Route("login"))
+        setLoginView(http, LoginView.class);
     }
 
     @Bean
-    public UserDetailsService userDetailsService() {
-        UserDetails user = User
-                .withUsername("root")
-                .password("{noop}root")
-                .roles("USER")
-                .build();
-
-        return new InMemoryUserDetailsManager(user);
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
     }
+
+    // ⛔ IMPORTANTE:
+    // NO declares aquí ningún @Bean UserDetailsService.
+    // Spring detecta automáticamente tu ClienteService porque implementa UserDetailsService.
 }
