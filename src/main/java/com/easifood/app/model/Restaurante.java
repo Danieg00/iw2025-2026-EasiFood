@@ -20,6 +20,9 @@ public class Restaurante {
 
     private String horario;
 
+    @Column(name = "imagen_url")
+    private String imagenUrl;
+
     // Relación One-To-One bidireccional con Gerente
     @OneToOne(mappedBy = "restaurante")
     private Gerente gerente;
@@ -87,4 +90,13 @@ public class Restaurante {
     public void setGerente(Gerente gerente) {
         this.gerente = gerente;
     }
+
+    public String getImagenUrl() {
+        return imagenUrl;
+    }
+
+    public void setImagenUrl(String imagenUrl) {
+        this.imagenUrl = imagenUrl;
+    }
+
 }

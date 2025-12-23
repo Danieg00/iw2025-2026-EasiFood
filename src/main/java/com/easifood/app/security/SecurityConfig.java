@@ -17,17 +17,16 @@ public class SecurityConfig {
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
-        // Recursos estáticos públicos (ajusta si lo necesitas)
+        // Recursos estáticos públicos
         http.authorizeHttpRequests(auth ->
                 auth.requestMatchers("/images/**").permitAll()
         );
 
-        // Configuración Vaadin + Spring Security (reemplazo de VaadinWebSecurity)
+        // Configuración Vaadin + Spring Security
         http.with(VaadinSecurityConfigurer.vaadin(), vaadin -> {
             vaadin.loginView(LoginView.class); // registra tu LoginView (Flow)
         });
 
-        // Opcional: si quieres forzar que tras login siempre vaya a /home:
         // http.formLogin(form -> form.defaultSuccessUrl("/home", true));
 
         return http.build();
