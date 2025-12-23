@@ -1,28 +1,36 @@
 package com.easifood.app.security;
 
 import com.easifood.app.views.LoginView;
-import com.vaadin.flow.spring.security.VaadinWebSecurity;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import com.vaadin.flow.spring.security.VaadinSecurityConfigurer;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 @Configuration
-public class SecurityConfig extends VaadinWebSecurity {
+@EnableWebSecurity
+public class SecurityConfig {
 
-    @Override
-    protected void configure(HttpSecurity http) throws Exception {
+    @Bean
+    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
-        // Permitir imágenes estáticas
+        // Recursos estáticos públicos (ajusta si lo necesitas)
         http.authorizeHttpRequests(auth ->
                 auth.requestMatchers("/images/**").permitAll()
         );
 
-        super.configure(http);
+        // Configuración Vaadin + Spring Security (reemplazo de VaadinWebSecurity)
+        http.with(VaadinSecurityConfigurer.vaadin(), vaadin -> {
+            vaadin.loginView(LoginView.class); // registra tu LoginView (Flow)
+        });
 
-        // Login personalizado → tras iniciar sesión va a /home
-        setLoginView(http, LoginView.class, "/home");
+        // Opcional: si quieres forzar que tras login siempre vaya a /home:
+        // http.formLogin(form -> form.defaultSuccessUrl("/home", true));
+
+        return http.build();
     }
 
     @Bean
