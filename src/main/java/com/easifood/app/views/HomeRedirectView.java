@@ -1,10 +1,9 @@
+
 package com.easifood.app.views;
 
 import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
-import com.vaadin.flow.router.BeforeEnterEvent;
-import com.vaadin.flow.router.BeforeEnterObserver;
 import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.PermitAll;
 import org.springframework.security.core.Authentication;
@@ -12,10 +11,14 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 @Route("")
 @PermitAll
-public class HomeRedirectView extends VerticalLayout implements BeforeEnterObserver {
+public class HomeRedirectView extends VerticalLayout {
+
+    public HomeRedirectView() {
+        setVisible(false); // no mostramos nada en esta vista
+    }
 
     @Override
-    public void beforeEnter(BeforeEnterEvent event) {
+    protected void onAttach(AttachEvent attachEvent) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
         if (auth == null || auth.getAuthorities() == null) {

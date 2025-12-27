@@ -11,16 +11,14 @@ public class Restaurante {
     private Long id;
 
     private String nombre;
-
     private String direccion;
-
     private Integer aforo;
-
     private String telefono;
-
     private String horario;
 
-    // Relación One-To-One bidireccional con Gerente
+    @Column(name = "imagen_url")
+    private String imagenUrl;
+
     @OneToOne(mappedBy = "restaurante")
     private Gerente gerente;
 
@@ -38,53 +36,26 @@ public class Restaurante {
         this.horario = horario;
     }
 
-    // ===========================
-    //       GETTERS / SETTERS
-    // ===========================
+    public Long getId() { return id; }
 
-    public Long getId() {
-        return id;
-    }
+    public String getNombre() { return nombre; }
+    public void setNombre(String nombre) { this.nombre = nombre; }
 
-    public String getNombre() {
-        return nombre;
-    }
-    public void setNombre(String nombre) {
-        this.nombre = nombre;
-    }
+    public String getDireccion() { return direccion; }
+    public void setDireccion(String direccion) { this.direccion = direccion; }
 
-    public String getDireccion() {
-        return direccion;
-    }
-    public void setDireccion(String direccion) {
-        this.direccion = direccion;
-    }
+    public Integer getAforo() { return aforo; }
+    public void setAforo(Integer aforo) { this.aforo = aforo; }
 
-    public Integer getAforo() {
-        return aforo;
-    }
-    public void setAforo(Integer aforo) {
-        this.aforo = aforo;
-    }
+    public String getTelefono() { return telefono; }
+    public void setTelefono(String telefono) { this.telefono = telefono; }
 
-    public String getTelefono() {
-        return telefono;
-    }
-    public void setTelefono(String telefono) {
-        this.telefono = telefono;
-    }
+    public String getHorario() { return horario; }
+    public void setHorario(String horario) { this.horario = horario; }
 
-    public String getHorario() {
-        return horario;
-    }
-    public void setHorario(String horario) {
-        this.horario = horario;
-    }
+    public String getImagenUrl() { return imagenUrl; }
+    public void setImagenUrl(String imagenUrl) { this.imagenUrl = imagenUrl; }
 
-    public Gerente getGerente() {
-        return gerente;
-    }
-    public void setGerente(Gerente gerente) {
-        this.gerente = gerente;
-    }
+    public Gerente getGerente() { return gerente; }
+    public void setGerente(Gerente gerente) { this.gerente = gerente; }
 }

@@ -30,6 +30,7 @@ Thumbs.db
 ### IntelliJ IDEA ###
 # Keep IntelliJ project settings for the team
 # Ignore only personal and cache files
+.idea/
 .idea/shelf/
 .idea/workspace.xml
 .idea/httpRequests/
