@@ -1,22 +1,30 @@
 package com.easifood.app.views;
 
+import com.easifood.app.service.FileStorageService;
 import com.easifood.app.service.UsuarioService;
+import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H1;
+import com.vaadin.flow.component.html.Image;
+import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.login.LoginForm;
 import com.vaadin.flow.component.login.LoginI18n;
+import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.orderedlayout.FlexComponent.Alignment;
-import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.PasswordField;
 import com.vaadin.flow.component.textfield.TextField;
+import com.vaadin.flow.component.upload.Upload;
+import com.vaadin.flow.server.streams.UploadHandler;
 import com.vaadin.flow.router.BeforeEnterEvent;
 import com.vaadin.flow.router.BeforeEnterObserver;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.auth.AnonymousAllowed;
+
+import java.io.ByteArrayInputStream;
 
 @PageTitle("Login | EasiFood")
 @Route("login")
@@ -25,7 +33,7 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
 
     private final LoginForm loginForm;
 
-    public LoginView(UsuarioService usuarioService) {
+    public LoginView(UsuarioService usuarioService, FileStorageService fileStorageService) {
 
         // ===============================
         // CONFIGURACIÓN DEL LAYOUT
@@ -77,15 +85,14 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
         // ===============================
         Button registerClienteBtn = new Button(
                 "Registrarse como Cliente",
-                e -> openRegisterClienteDialog(usuarioService)
+                e -> openRegisterClienteDialog(usuarioService, fileStorageService)
         );
 
         Button registerGerenteBtn = new Button(
                 "Registrarse como Gerente",
-                e -> openRegisterGerenteDialog(usuarioService)
+                e -> openRegisterGerenteDialog(usuarioService, fileStorageService)
         );
 
-        // Layout vertical para los dos botones
         VerticalLayout btnLayout = new VerticalLayout(registerClienteBtn, registerGerenteBtn);
         btnLayout.setPadding(false);
         btnLayout.setSpacing(true);
@@ -111,7 +118,6 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
         card.add(cardLayout);
         wrapper.add(card);
 
-        // Añadir todo a la vista
         add(overlay, wrapper);
     }
 
@@ -120,7 +126,6 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
     // ============================================================
     @Override
     public void beforeEnter(BeforeEnterEvent event) {
-
         boolean hasError = event.getLocation()
                 .getQueryParameters()
                 .getParameters()
@@ -158,7 +163,8 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
     // ============================================================
     // REGISTRO DE CLIENTE
     // ============================================================
-    private void openRegisterClienteDialog(UsuarioService usuarioService) {
+    private void openRegisterClienteDialog(UsuarioService usuarioService,
+                                           FileStorageService fileStorageService) {
 
         Dialog dialog = new Dialog();
         dialog.setHeaderTitle("Registro de Cliente");
@@ -180,9 +186,49 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
         direccion1.setWidthFull();
         direccion2.setWidthFull();
 
+        // ✅ Foto de perfil (opcional) - UploadHandler API (Vaadin 24.8+)
+        Image preview = new Image();
+        preview.setVisible(false);
+        preview.setWidth("110px");
+        preview.setHeight("110px");
+        preview.getStyle().set("border-radius", "50%").set("object-fit", "cover");
+
+        final String[] imagenUrl = { null };
+        UI ui = UI.getCurrent();
+
+        Upload upload = new Upload(
+                UploadHandler.inMemory((metadata, bytes) -> {
+                    // Validación simple extra (por si acaso)
+                    if (bytes == null || bytes.length == 0) return;
+
+                    String fileName = metadata.fileName();
+                    String savedUrl = fileStorageService.saveUserImage(
+                            new ByteArrayInputStream(bytes),
+                            fileName
+                    );
+
+                    imagenUrl[0] = savedUrl;
+
+                    // actualizar UI con seguridad
+                    if (ui != null) {
+                        ui.access(() -> {
+                            preview.setSrc(savedUrl);
+                            preview.setVisible(true);
+                        });
+                    }
+                })
+        );
+
+        upload.setAcceptedFileTypes("image/jpeg", "image/png", "image/webp");
+        upload.setMaxFiles(1);
+        upload.setMaxFileSize(3 * 1024 * 1024); // 3MB
+        upload.setDropLabel(new Span("Arrastra tu foto aquí o pulsa para seleccionar"));
 
         VerticalLayout layout = new VerticalLayout(
-                nombre, apellidos, correo, contra, direccion1, direccion2
+                nombre, apellidos, correo, contra, direccion1, direccion2,
+                new Span("Foto de perfil (opcional)"),
+                upload,
+                preview
         );
 
         layout.setSpacing(false);
@@ -198,7 +244,8 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
                         correo.getValue(),
                         contra.getValue(),
                         direccion1.getValue(),
-                        direccion2.getValue()
+                        direccion2.getValue(),
+                        imagenUrl[0] // ✅ NUEVO
                 );
                 dialog.close();
             } catch (Exception ex) {
@@ -217,7 +264,8 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
     // ============================================================
     // REGISTRO DE GERENTE
     // ============================================================
-    private void openRegisterGerenteDialog(UsuarioService usuarioService) {
+    private void openRegisterGerenteDialog(UsuarioService usuarioService,
+                                           FileStorageService fileStorageService) {
 
         Dialog dialog = new Dialog();
         dialog.setHeaderTitle("Registro de Gerente y Restaurante");
@@ -247,16 +295,54 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
         telefono.setWidthFull();
         horario.setWidthFull();
 
+        // ✅ Foto de perfil (opcional) - UploadHandler API
+        Image preview = new Image();
+        preview.setVisible(false);
+        preview.setWidth("110px");
+        preview.setHeight("110px");
+        preview.getStyle().set("border-radius", "50%").set("object-fit", "cover");
+
+        final String[] imagenUrl = { null };
+        UI ui = UI.getCurrent();
+
+        Upload upload = new Upload(
+                UploadHandler.inMemory((metadata, bytes) -> {
+                    if (bytes == null || bytes.length == 0) return;
+
+                    String fileName = metadata.fileName();
+                    String savedUrl = fileStorageService.saveUserImage(
+                            new ByteArrayInputStream(bytes),
+                            fileName
+                    );
+
+                    imagenUrl[0] = savedUrl;
+
+                    if (ui != null) {
+                        ui.access(() -> {
+                            preview.setSrc(savedUrl);
+                            preview.setVisible(true);
+                        });
+                    }
+                })
+        );
+
+        upload.setAcceptedFileTypes("image/jpeg", "image/png", "image/webp");
+        upload.setMaxFiles(1);
+        upload.setMaxFileSize(3 * 1024 * 1024); // 3MB
+        upload.setDropLabel(new Span("Arrastra tu foto aquí o pulsa para seleccionar"));
+
         VerticalLayout layout = new VerticalLayout(
                 nombre, apellidos, correo, contra,
-                nombreRest, direccion, aforo, telefono, horario
+                nombreRest, direccion, aforo, telefono, horario,
+                new Span("Foto de perfil (opcional)"),
+                upload,
+                preview
         );
 
         layout.setSpacing(false);
         layout.setPadding(true);
         layout.getStyle().set("row-gap", "0.4rem");
         layout.setWidthFull();
-
 
         Button registrar = new Button("Registrar", event -> {
             try {
@@ -274,7 +360,8 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
                         direccion.getValue(),
                         aforoInt,
                         telefono.getValue(),
-                        horario.getValue()
+                        horario.getValue(),
+                        imagenUrl[0] // ✅ NUEVO
                 );
 
                 dialog.close();
@@ -283,14 +370,11 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
                 aforo.setInvalid(true);
                 aforo.setErrorMessage("Debe ser un número.");
             } catch (IllegalArgumentException iae) {
-                // Esta sí corresponde al correo duplicado
                 correo.setInvalid(true);
                 correo.setErrorMessage(iae.getMessage());
             } catch (Exception ex) {
-                // Aquí puedes ver el error real mientras desarrollas
                 ex.printStackTrace();
-                // Si quieres, pon un mensaje genérico:
-                // Notification.show("Error al registrar el gerente");
+                Notification.show("Error al registrar");
             }
         });
 

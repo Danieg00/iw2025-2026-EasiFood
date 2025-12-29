@@ -22,4 +22,8 @@ public class RestauranteService {
     public Restaurante findById(Long id) {
         return restauranteRepository.findById(id).orElse(null);
     }
+
+    public Restaurante save(Restaurante restaurante) {
+        return restauranteRepository.save(restaurante);
+    }
 }

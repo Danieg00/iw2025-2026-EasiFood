@@ -1,17 +1,20 @@
 package com.easifood.app.views;
 
+import com.easifood.app.model.Usuario;
 import com.easifood.app.model.Restaurante;
-import com.easifood.app.service.RestauranteService;
 import com.easifood.app.service.ProductoService;
+import com.easifood.app.service.RestauranteService;
+import com.easifood.app.service.UsuarioService;
 import com.easifood.app.views.components.ClienteRestauranteContent;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
+import com.vaadin.flow.component.avatar.Avatar;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
+import com.vaadin.flow.component.contextmenu.ContextMenu;
 import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.html.H2;
-import com.vaadin.flow.component.html.Image;
 import com.vaadin.flow.component.html.Paragraph;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.Icon;
@@ -23,18 +26,12 @@ import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.tabs.Tab;
 import com.vaadin.flow.component.tabs.Tabs;
 import com.vaadin.flow.component.textfield.TextField;
-import com.vaadin.flow.router.BeforeEnterEvent;
-import com.vaadin.flow.router.BeforeEnterObserver;
-import com.vaadin.flow.router.PageTitle;
-import com.vaadin.flow.router.QueryParameters;
-import com.vaadin.flow.router.Route;
+import com.vaadin.flow.router.*;
 import jakarta.annotation.security.RolesAllowed;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import com.vaadin.flow.spring.security.AuthenticationContext;
+import java.util.*;
 
 @PageTitle("Área Cliente")
 @Route("home-cliente")
@@ -43,6 +40,9 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
 
     private final RestauranteService restauranteService;
     private final ProductoService productoService;
+    private final UsuarioService usuarioService;
+    private final AuthenticationContext authenticationContext;
+
 
     private final VerticalLayout content = new VerticalLayout();
     private final Map<Tab, Component> tabToContent = new HashMap<>();
@@ -51,15 +51,20 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
     private Dialog cartaDialog;
     private Long restauranteIdEnDialog;
 
-    public ClienteHomeView(RestauranteService restauranteService, ProductoService productoService) {
+    public ClienteHomeView(RestauranteService restauranteService,
+                           ProductoService productoService,
+                           UsuarioService usuarioService,
+                           AuthenticationContext authenticationContext) {
         this.restauranteService = restauranteService;
         this.productoService = productoService;
+        this.usuarioService = usuarioService;
+        this.authenticationContext = authenticationContext;
 
         setSizeFull();
         setPadding(true);
         setSpacing(true);
 
-        add(buildHeader());
+        add(buildHeader()); // 👈 título centrado + avatar a la derecha
 
         Tab tabExplorar = new Tab("Explorar");
         Tab tabCarrito = new Tab("Carrito");
@@ -90,7 +95,6 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
         tabs.addSelectedChangeListener(e -> showContent(e.getSelectedTab()));
     }
 
-    // BONUS: si entras a /home-cliente?restaurante=ID abre el popup
     @Override
     public void beforeEnter(BeforeEnterEvent event) {
         String value = event.getLocation()
@@ -109,15 +113,29 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
                     || restauranteIdEnDialog == null || !restauranteIdEnDialog.equals(id)) {
                 openCartaDialog(id, false); // false = no reescribir URL (ya viene con param)
             }
-        } catch (NumberFormatException ignored) { }
+        } catch (NumberFormatException ignored) {
+        }
     }
 
+    // ==========================
+    // HEADER: título centrado + avatar derecha
+    // ==========================
     private Component buildHeader() {
-        VerticalLayout header = new VerticalLayout();
+        HorizontalLayout header = new HorizontalLayout();
         header.setWidthFull();
         header.setPadding(false);
         header.setSpacing(false);
         header.setAlignItems(FlexComponent.Alignment.CENTER);
+
+        // “hueco” a la izquierda para centrar de verdad el bloque del título
+        DivStub leftStub = new DivStub(48);
+
+        // Centro: título + subtítulo
+        VerticalLayout center = new VerticalLayout();
+        center.setPadding(false);
+        center.setSpacing(false);
+        center.setAlignItems(FlexComponent.Alignment.CENTER);
+        center.setWidthFull();
 
         H1 title = new H1("EasiFood");
         title.getStyle()
@@ -131,8 +149,73 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
                 .set("opacity", "0.7")
                 .set("font-size", "0.95rem");
 
-        header.add(title, subtitle);
+        center.add(title, subtitle);
+
+        // Derecha: avatar + menú
+        Component userMenu = buildUserMenu();
+
+        header.add(leftStub, center, userMenu);
+        header.expand(center);
+
         return header;
+    }
+
+    private Component buildUserMenu() {
+        Usuario u = getUsuarioActual();
+
+        String nombre = (u != null && u.getNombre() != null && !u.getNombre().isBlank())
+                ? u.getNombre()
+                : "Usuario";
+
+        Avatar avatar = new Avatar(nombre);
+        avatar.setWidth("44px");
+        avatar.setHeight("44px");
+        avatar.getStyle().set("cursor", "pointer");
+
+
+        //si hay foto en BD, se usa
+        if (u != null && u.getImagen() != null && !u.getImagen().isBlank()) {
+            avatar.setImage(u.getImagen());
+        }
+
+        // Context menu al pinchar
+        ContextMenu menu = new ContextMenu(avatar);
+        menu.setOpenOnClick(true);
+        menu.getStyle().set("cursor", "pointer");
+
+
+        menu.addItem("Mi perfil", e -> {
+            // IMPORTANTE: si había dialog o query param, lo limpiamos para no “reabrir” al volver atrás
+            closeDialogIfOpen();
+            clearRestauranteQueryParam();
+            UI.getCurrent().navigate("perfil");
+        });
+
+        menu.addItem("Cerrar sesión", e -> {
+            closeDialogIfOpen();
+            clearRestauranteQueryParam();
+            authenticationContext.logout();
+        });
+
+        HorizontalLayout wrap = new HorizontalLayout(avatar);
+        wrap.setPadding(false);
+        wrap.setSpacing(false);
+        wrap.setAlignItems(FlexComponent.Alignment.CENTER);
+        wrap.getStyle().set("cursor", "pointer");
+
+        return wrap;
+    }
+
+    private Usuario getUsuarioActual() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || auth.getName() == null) return null;
+        return usuarioService.findByCorreo(auth.getName());
+    }
+
+    private void closeDialogIfOpen() {
+        if (cartaDialog != null && cartaDialog.isOpened()) {
+            cartaDialog.close();
+        }
     }
 
     private void showContent(Tab selected) {
@@ -141,6 +224,9 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
         if (c != null) content.add(c);
     }
 
+    // ==========================
+    // EXPLORAR
+    // ==========================
     private Component buildExplorarContent() {
 
         VerticalLayout layout = new VerticalLayout();
@@ -157,7 +243,6 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
         searchWrapper.setWidthFull();
         searchWrapper.setJustifyContentMode(FlexComponent.JustifyContentMode.CENTER);
 
-        // Contenedor tipo galería
         FlexLayout gallery = new FlexLayout();
         gallery.setWidthFull();
         gallery.getStyle()
@@ -166,13 +251,11 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
                 .set("gap", "16px")
                 .set("justify-content", "center");
 
-        // Datos
         List<Restaurante> all = restauranteService.findAll();
         List<Restaurante> filtered = new ArrayList<>(all);
 
         renderGallery(gallery, filtered);
 
-        // Filtro
         search.addValueChangeListener(e -> {
             String term = e.getValue() == null ? "" : e.getValue().trim().toLowerCase();
             filtered.clear();
@@ -215,7 +298,6 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
         card.setPadding(false);
         card.setSpacing(false);
 
-        // Responsive width
         card.getStyle()
                 .set("flex", "1 1 calc(33.333% - 16px)")
                 .set("max-width", "calc(33.333% - 16px)")
@@ -231,12 +313,12 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
                 ? r.getImagenUrl()
                 : "/images/restaurantes/default.jpg";
 
-        Image img = new Image(url, "Foto " + safe(r.getNombre()));
+        com.vaadin.flow.component.html.Image img =
+                new com.vaadin.flow.component.html.Image(url, "Foto " + safe(r.getNombre()));
         img.setWidthFull();
         img.setHeight("160px");
         img.getStyle().set("object-fit", "cover");
 
-        // Contenido
         VerticalLayout body = new VerticalLayout();
         body.setPadding(true);
         body.setSpacing(false);
@@ -248,14 +330,12 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
         direccion.getStyle().set("margin", "0.25rem 0");
         direccion.getStyle().set("opacity", "0.85");
 
-        Paragraph meta = new Paragraph(
-                "📞 " + safe(r.getTelefono()) + " · ⏰ " + safe(r.getHorario())
-        );
+        Paragraph meta = new Paragraph("📞 " + safe(r.getTelefono()) + " · ⏰ " + safe(r.getHorario()));
         meta.getStyle().set("margin", "0");
         meta.getStyle().set("opacity", "0.75");
         meta.getStyle().set("font-size", "0.9rem");
 
-        // ✅ Popup en vez de navegar
+        //Popup
         Button ver = new Button("Ver carta", e -> openCartaDialog(r.getId(), true));
         ver.setWidthFull();
         ver.getStyle()
@@ -269,6 +349,9 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
         return card;
     }
 
+    // ==========================
+    // DIALOG CARTA
+    // ==========================
     private void openCartaDialog(Long restauranteId, boolean updateUrl) {
 
         if (cartaDialog != null && cartaDialog.isOpened()
@@ -291,14 +374,12 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
         cartaDialog.setWidth("min(1000px, 92vw)");
         cartaDialog.setHeight("min(720px, 90vh)");
 
-        // Botón cerrar
         Button close = new Button(new Icon(VaadinIcon.CLOSE), e -> cartaDialog.close());
 
         HorizontalLayout header = new HorizontalLayout(close);
         header.setWidthFull();
         header.setJustifyContentMode(FlexComponent.JustifyContentMode.END);
 
-        // 🔥 AQUÍ VA LA LÍNEA QUE PREGUNTAS
         Component carta = new ClienteRestauranteContent(
                 restauranteId,
                 restauranteService,
@@ -312,6 +393,7 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
 
         cartaDialog.add(wrapper);
 
+        // Al cerrar, limpiamos param
         cartaDialog.addDialogCloseActionListener(e -> clearRestauranteQueryParam());
 
         if (updateUrl) {
@@ -326,6 +408,7 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
 
     private void clearRestauranteQueryParam() {
         restauranteIdEnDialog = null;
+
         UI ui = UI.getCurrent();
         if (ui != null) {
             ui.navigate("home-cliente");
@@ -336,6 +419,9 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
         return (s == null || s.isBlank()) ? "-" : s;
     }
 
+    // ==========================
+    // TABs placeholder
+    // ==========================
     private Component buildCarritoContent() {
         VerticalLayout layout = new VerticalLayout();
         layout.setSizeFull();
@@ -350,5 +436,15 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
         layout.add(new H1("Mis pedidos"));
         layout.add(new Span("Pendiente: listar pedidos del cliente, modificar/cancelar y generar ticket."));
         return layout;
+    }
+
+    // ==========================
+    // Pequeño “stub” para centrar el título
+    // ==========================
+    private static class DivStub extends com.vaadin.flow.component.html.Div {
+        DivStub(int px) {
+            setWidth(px + "px");
+            setHeight("1px");
+        }
     }
 }

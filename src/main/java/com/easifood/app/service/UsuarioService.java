@@ -4,129 +4,112 @@ import com.easifood.app.model.Cliente;
 import com.easifood.app.model.Gerente;
 import com.easifood.app.model.Restaurante;
 import com.easifood.app.model.Usuario;
-
+import com.easifood.app.repository.ClienteRepository;
 import com.easifood.app.repository.UsuarioRepository;
-import com.easifood.app.repository.RestauranteRepository;
-
-import org.springframework.stereotype.Service;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.security.core.userdetails.User;
+import org.springframework.stereotype.Service;
 
 @Service
-public class UsuarioService implements UserDetailsService {
+public class UsuarioService {
 
     private final UsuarioRepository usuarioRepository;
-    private final RestauranteRepository restauranteRepository;
-    private final PasswordEncoder encoder;
+    private final ClienteRepository clienteRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final RestauranteService restauranteService;
 
-    // ✅ ÚNICO CONSTRUCTOR VÁLIDO
-    public UsuarioService(UsuarioRepository usuarioRepository,
-                          RestauranteRepository restauranteRepository,
-                          PasswordEncoder encoder) {
-
+    public UsuarioService(
+            UsuarioRepository usuarioRepository,
+            ClienteRepository clienteRepository,
+            PasswordEncoder passwordEncoder,
+            RestauranteService restauranteService
+    ) {
         this.usuarioRepository = usuarioRepository;
-        this.restauranteRepository = restauranteRepository;
-        this.encoder = encoder;
+        this.clienteRepository = clienteRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.restauranteService = restauranteService;
     }
 
-    // ============================================================
-    // REGISTRO DE CLIENTE
-    // ============================================================
-    public Cliente registrarCliente(String nombre,
-                                    String apellidos,
-                                    String correo,
-                                    String contra,
-                                    String direccion1,
-                                    String direccion2) {
+    // =====================================================
+    // CONSULTAS
+    // =====================================================
+    public Usuario findByCorreo(String correo) {
+        return usuarioRepository.findByCorreo(correo).orElse(null);
+    }
+
+    // =====================================================
+    // REGISTRO CLIENTE
+    // =====================================================
+    public void registrarCliente(
+            String nombre,
+            String apellidos,
+            String correo,
+            String contra,
+            String direccion1,
+            String direccion2,
+            String imagenUrl
+    ) {
 
         if (usuarioRepository.findByCorreo(correo).isPresent()) {
-            throw new IllegalArgumentException("Ese correo ya está registrado.");
+            throw new IllegalArgumentException("El correo ya está registrado");
         }
 
-        String contraCodificada = encoder.encode(contra);
+        String passwordEncriptada = passwordEncoder.encode(contra);
 
         Cliente cliente = new Cliente(
                 nombre,
                 apellidos,
                 correo,
-                null,
-                contraCodificada,
+                imagenUrl,
+                passwordEncriptada,
                 direccion1,
                 direccion2
         );
 
-        return usuarioRepository.save(cliente);
+        clienteRepository.save(cliente);
     }
 
-    // ============================================================
-    // LOGIN SPRING SECURITY
-    // ============================================================
-    @Override
-    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-
-        Usuario usuario = usuarioRepository.findByCorreo(username)
-                .orElseThrow(() -> new UsernameNotFoundException("No existe un usuario con ese correo."));
-
-        return User
-                .withUsername(usuario.getCorreo())
-                .password(usuario.getContra())
-                .authorities(usuario.getRole())
-                .build();
-    }
-
-    // ============================================================
-    // REGISTRO DE GERENTE Y RESTAURANTE
-    // ============================================================
-    public Gerente registrarGerente(String nombre,
-                                    String apellidos,
-                                    String correo,
-                                    String contra,
-                                    String nombreRest,
-                                    String direccion,
-                                    Integer aforo,
-                                    String telefono,
-                                    String horario) {
+    // =====================================================
+    // REGISTRO GERENTE
+    // =====================================================
+    public void registrarGerente(
+            String nombre,
+            String apellidos,
+            String correo,
+            String contra,
+            String nombreRest,
+            String direccion,
+            Integer aforo,
+            String telefono,
+            String horario,
+            String imagenUrl
+    ) {
 
         if (usuarioRepository.findByCorreo(correo).isPresent()) {
-            throw new IllegalArgumentException("Ese correo ya está registrado.");
+            throw new IllegalArgumentException("El correo ya está registrado");
         }
 
-        String contraCodificada = encoder.encode(contra);
+        String passwordEncriptada = passwordEncoder.encode(contra);
 
-        // buscar restaurante por nombre + direccion
-        Restaurante restaurante = restauranteRepository
-                .findByNombreAndDireccion(nombreRest, direccion)
-                .orElse(null);
+        // Crear restaurante
+        Restaurante restaurante = new Restaurante(
+                nombreRest,
+                direccion,
+                aforo,
+                telefono,
+                horario
+        );
+        restauranteService.save(restaurante);
 
-        if (restaurante == null) {
-            // crear restaurante nuevo
-            restaurante = new Restaurante(nombreRest, direccion, aforo, telefono, horario);
-            restaurante = restauranteRepository.save(restaurante);
-        } else {
-            // SI el restaurante ya existe y tiene gerente → ERROR
-            if (restaurante.getGerente() != null) {
-                throw new IllegalArgumentException("Ese restaurante ya tiene un gerente asignado.");
-            }
-        }
-
-        // crear gerente
+        // Crear gerente
         Gerente gerente = new Gerente(
                 nombre,
                 apellidos,
                 correo,
-                null,
-                contraCodificada,
+                imagenUrl,
+                passwordEncriptada,
                 restaurante
         );
 
-        // RELACIÓN BIDIRECCIONAL
-        restaurante.setGerente(gerente);
-
-        // guardar gerente
-        return (Gerente) usuarioRepository.save(gerente);
+        usuarioRepository.save(gerente);
     }
-
 }
