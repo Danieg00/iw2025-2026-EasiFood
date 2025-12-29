@@ -5,7 +5,6 @@ import com.easifood.app.service.RestauranteService;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
-import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.html.Image;
 import com.vaadin.flow.component.html.Span;
@@ -14,13 +13,19 @@ import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.tabs.Tab;
 import com.vaadin.flow.component.tabs.Tabs;
 import com.vaadin.flow.component.textfield.TextField;
-import com.vaadin.flow.data.provider.ListDataProvider;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.RolesAllowed;
-
 import java.util.HashMap;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
+import com.vaadin.flow.component.html.H2;
+import com.vaadin.flow.component.html.Paragraph;
+import com.vaadin.flow.component.orderedlayout.FlexLayout;
+import com.vaadin.flow.component.button.ButtonVariant;
+
+
 
 @PageTitle("Área Cliente")
 @Route("home-cliente")
@@ -46,7 +51,15 @@ public class ClienteHomeView extends VerticalLayout {
         Tab tabPedidos = new Tab("Mis pedidos");
 
         Tabs tabs = new Tabs(tabExplorar, tabCarrito, tabPedidos);
-        tabs.setWidthFull();
+
+
+        tabs.setWidth("auto");
+        tabs.getStyle().set("margin-top", "0.5rem");
+
+        HorizontalLayout tabsWrapper = new HorizontalLayout(tabs);
+        tabsWrapper.setWidthFull();
+        tabsWrapper.setJustifyContentMode(JustifyContentMode.CENTER);
+        tabsWrapper.setAlignItems(Alignment.CENTER);
 
         tabToContent.put(tabExplorar, buildExplorarContent());
         tabToContent.put(tabCarrito, buildCarritoContent());
@@ -56,7 +69,7 @@ public class ClienteHomeView extends VerticalLayout {
         content.setPadding(false);
         content.setSpacing(false);
 
-        add(tabs, content);
+        add(tabsWrapper, content);
         expand(content);
 
         showContent(tabExplorar);
@@ -65,18 +78,25 @@ public class ClienteHomeView extends VerticalLayout {
     }
 
     private Component buildHeader() {
-        HorizontalLayout header = new HorizontalLayout();
+        VerticalLayout header = new VerticalLayout();
         header.setWidthFull();
-        header.setAlignItems(Alignment.BASELINE);
-        header.setJustifyContentMode(JustifyContentMode.BETWEEN);
+        header.setPadding(false);
+        header.setSpacing(false);
+        header.setAlignItems(Alignment.CENTER);
 
-        H1 title = new H1("Área Cliente");
-        title.getStyle().set("margin", "0");
+        H1 title = new H1("EasiFood");
+        title.getStyle()
+                .set("margin", "0.5rem 0 0.25rem 0")
+                .set("font-weight", "800")
+                .set("font-size", "2.4rem")
+                .set("letter-spacing", "0.5px");
 
-        Span userInfo = new Span("Cliente");
-        userInfo.getStyle().set("opacity", "0.7");
+        Span subtitle = new Span("Tu comida, fácil y rápido");
+        subtitle.getStyle()
+                .set("opacity", "0.7")
+                .set("font-size", "0.95rem");
 
-        header.add(title, userInfo);
+        header.add(title, subtitle);
         return header;
     }
 
@@ -87,71 +107,134 @@ public class ClienteHomeView extends VerticalLayout {
     }
 
     private Component buildExplorarContent() {
+
         VerticalLayout layout = new VerticalLayout();
         layout.setSizeFull();
-
-        H1 title = new H1("Explorar restaurantes");
-        title.getStyle().set("margin", "0");
+        layout.setPadding(false);
+        layout.setSpacing(true);
 
         TextField search = new TextField();
         search.setPlaceholder("Buscar por nombre...");
         search.setClearButtonVisible(true);
-        search.setWidth("320px");
+        search.setWidth("360px");
 
-        ListDataProvider<Restaurante> provider =
-                new ListDataProvider<>(restauranteService.findAll());
+        HorizontalLayout searchWrapper = new HorizontalLayout(search);
+        searchWrapper.setWidthFull();
+        searchWrapper.setJustifyContentMode(JustifyContentMode.CENTER);
 
-        Grid<Restaurante> grid = new Grid<>(Restaurante.class, false);
-        grid.setSizeFull();
-        grid.getStyle().set("--vaadin-grid-row-height", "60px");
+        // Contenedor tipo galería
+        FlexLayout gallery = new FlexLayout();
+        gallery.setWidthFull();
+        gallery.getStyle()
+                .set("display", "flex")
+                .set("flex-wrap", "wrap")
+                .set("gap", "16px")
+                .set("justify-content", "center"); // ✅ centra las cards si hay hueco
 
-        // Columna imagen (opción B: URL guardada en BD)
-        grid.addComponentColumn(r -> {
-            String url = (r.getImagenUrl() != null && !r.getImagenUrl().isBlank())
-                    ? r.getImagenUrl()
-                    : "/images/restaurantes/default.jpg";
+        // Datos
+        List<Restaurante> all = restauranteService.findAll();
+        List<Restaurante> filtered = new ArrayList<>(all);
 
-            Image img = new Image(url, "Foto " + r.getNombre());
-            img.setWidth("72px");
-            img.setHeight("48px");
-            img.getStyle().set("object-fit", "cover");
-            img.getStyle().set("border-radius", "8px");
-            return img;
-        }).setHeader("Foto").setAutoWidth(true).setFlexGrow(0);
+        renderGallery(gallery, filtered);
 
-        grid.addColumn(Restaurante::getNombre)
-                .setHeader("Nombre")
-                .setAutoWidth(true)
-                .setFlexGrow(1);
-
-        grid.addColumn(Restaurante::getDireccion)
-                .setHeader("Dirección")
-                .setAutoWidth(true);
-
-        grid.addColumn(Restaurante::getTelefono)
-                .setHeader("Teléfono")
-                .setAutoWidth(true);
-
-        grid.addColumn(Restaurante::getHorario)
-                .setHeader("Horario")
-                .setAutoWidth(true);
-
-        grid.addComponentColumn(r ->
-                new Button("Ver", e -> UI.getCurrent().navigate("cliente-restaurante/" + r.getId()))
-        ).setHeader("Acciones").setAutoWidth(true).setFlexGrow(0);
-
-        grid.setDataProvider(provider);
-
+        // Filtro
         search.addValueChangeListener(e -> {
             String term = e.getValue() == null ? "" : e.getValue().trim().toLowerCase();
-            provider.setFilter(r ->
-                    r.getNombre() != null && r.getNombre().toLowerCase().contains(term)
-            );
+            filtered.clear();
+
+            if (term.isBlank()) {
+                filtered.addAll(all);
+            } else {
+                for (Restaurante r : all) {
+                    if (r.getNombre() != null && r.getNombre().toLowerCase().contains(term)) {
+                        filtered.add(r);
+                    }
+                }
+            }
+            renderGallery(gallery, filtered);
         });
 
-        layout.add(title, search, grid);
-        layout.expand(grid);
+        layout.add(searchWrapper, gallery);
+        layout.expand(gallery);
         return layout;
+    }
+
+    private void renderGallery(FlexLayout gallery, List<Restaurante> restaurantes) {
+        gallery.removeAll();
+
+        if (restaurantes.isEmpty()) {
+            Span empty = new Span("No hay restaurantes que coincidan con la búsqueda.");
+            empty.getStyle().set("opacity", "0.7");
+            gallery.add(empty);
+            return;
+        }
+
+        for (Restaurante r : restaurantes) {
+            gallery.add(createRestauranteCard(r));
+        }
+    }
+
+    private Component createRestauranteCard(Restaurante r) {
+
+        VerticalLayout card = new VerticalLayout();
+        card.setPadding(false);
+        card.setSpacing(false);
+
+        // Responsive width
+        card.getStyle()
+                .set("flex", "1 1 calc(33.333% - 16px)") // desktop
+                .set("max-width", "calc(33.333% - 16px)")
+                .set("min-width", "260px")
+                .set("border-radius", "18px")
+                .set("overflow", "hidden")
+                .set("background", "var(--lumo-base-color)")
+                .set("box-shadow", "var(--lumo-box-shadow-s)")
+                .set("transition", "transform 0.12s ease-in-out");
+
+        // Imagen
+        String url = (r.getImagenUrl() != null && !r.getImagenUrl().isBlank())
+                ? r.getImagenUrl()
+                : "/images/restaurantes/default.jpg";
+
+        Image img = new Image(url, "Foto " + safe(r.getNombre()));
+        img.setWidthFull();
+        img.setHeight("160px");
+        img.getStyle().set("object-fit", "cover");
+
+        // Contenido
+        VerticalLayout body = new VerticalLayout();
+        body.setPadding(true);
+        body.setSpacing(false);
+
+        H2 name = new H2(safe(r.getNombre()));
+        name.getStyle().set("margin", "0");
+
+        Paragraph direccion = new Paragraph("📍 " + safe(r.getDireccion()));
+        direccion.getStyle().set("margin", "0.25rem 0");
+        direccion.getStyle().set("opacity", "0.85");
+
+        Paragraph meta = new Paragraph(
+                "📞 " + safe(r.getTelefono()) + " · ⏰ " + safe(r.getHorario())
+        );
+        meta.getStyle().set("margin", "0");
+        meta.getStyle().set("opacity", "0.75");
+        meta.getStyle().set("font-size", "0.9rem");
+
+        Button ver = new Button("Ver carta", e -> UI.getCurrent().navigate("cliente-restaurante/" + r.getId()));
+        ver.setWidthFull();
+        ver.getStyle()
+                .set("margin-top", "0.75rem")
+                .set("font-weight", "600")
+                .set("cursor", "pointer");
+        ver.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
+
+        body.add(name, direccion, meta, ver);
+        card.add(img, body);
+        return card;
+    }
+
+    private String safe(String s) {
+        return (s == null || s.isBlank()) ? "-" : s;
     }
 
     private Component buildCarritoContent() {
