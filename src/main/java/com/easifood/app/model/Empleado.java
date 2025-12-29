@@ -14,6 +14,7 @@ public class Empleado {
     private String nombre;
     private String puesto;
     private BigDecimal salario;
+    private String imagen;
 
     @ManyToOne
     @JoinColumn(name = "restaurante_id")
@@ -38,4 +39,6 @@ public class Empleado {
     public void setSalario(BigDecimal salario) { this.salario = salario; }
     public Restaurante getRestaurante() { return restaurante; }
     public void setRestaurante(Restaurante restaurante) { this.restaurante = restaurante; }
+    public String getImagen() { return imagen; }
+    public void setImagen(String imagen) { this.imagen = imagen; }
 }
