@@ -1,4 +1,3 @@
-
 package com.easifood.app.views;
 
 import com.vaadin.flow.component.AttachEvent;
@@ -14,14 +13,16 @@ import org.springframework.security.core.context.SecurityContextHolder;
 public class HomeRedirectView extends VerticalLayout {
 
     public HomeRedirectView() {
-        setVisible(false); // no mostramos nada en esta vista
+        setVisible(false);
     }
 
     @Override
     protected void onAttach(AttachEvent attachEvent) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
-        if (auth == null || auth.getAuthorities() == null) {
+        // OJO: cuando no estás logueado, muchas veces auth existe pero es "anonymousUser"
+        if (auth == null || auth.getAuthorities() == null || auth.getAuthorities().isEmpty()
+                || "anonymousUser".equals(String.valueOf(auth.getPrincipal()))) {
             UI.getCurrent().navigate("login");
             return;
         }

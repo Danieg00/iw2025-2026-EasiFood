@@ -2,43 +2,58 @@ package com.easifood.app.views;
 
 import com.easifood.app.model.Restaurante;
 import com.easifood.app.service.RestauranteService;
+import com.easifood.app.service.ProductoService;
+import com.easifood.app.views.components.ClienteRestauranteContent;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
+import com.vaadin.flow.component.button.ButtonVariant;
+import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.html.H1;
+import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.Image;
+import com.vaadin.flow.component.html.Paragraph;
 import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.icon.Icon;
+import com.vaadin.flow.component.icon.VaadinIcon;
+import com.vaadin.flow.component.orderedlayout.FlexComponent;
+import com.vaadin.flow.component.orderedlayout.FlexLayout;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.tabs.Tab;
 import com.vaadin.flow.component.tabs.Tabs;
 import com.vaadin.flow.component.textfield.TextField;
+import com.vaadin.flow.router.BeforeEnterEvent;
+import com.vaadin.flow.router.BeforeEnterObserver;
 import com.vaadin.flow.router.PageTitle;
+import com.vaadin.flow.router.QueryParameters;
 import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.RolesAllowed;
-import java.util.HashMap;
-import java.util.Map;
+
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
-import com.vaadin.flow.component.html.H2;
-import com.vaadin.flow.component.html.Paragraph;
-import com.vaadin.flow.component.orderedlayout.FlexLayout;
-import com.vaadin.flow.component.button.ButtonVariant;
-
-
+import java.util.Map;
 
 @PageTitle("Área Cliente")
 @Route("home-cliente")
 @RolesAllowed("ROLE_CLIENTE")
-public class ClienteHomeView extends VerticalLayout {
+public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserver {
 
     private final RestauranteService restauranteService;
+    private final ProductoService productoService;
 
     private final VerticalLayout content = new VerticalLayout();
     private final Map<Tab, Component> tabToContent = new HashMap<>();
 
-    public ClienteHomeView(RestauranteService restauranteService) {
+    // --- Popup carta + bonus URL ---
+    private Dialog cartaDialog;
+    private Long restauranteIdEnDialog;
+
+    public ClienteHomeView(RestauranteService restauranteService, ProductoService productoService) {
         this.restauranteService = restauranteService;
+        this.productoService = productoService;
 
         setSizeFull();
         setPadding(true);
@@ -51,15 +66,13 @@ public class ClienteHomeView extends VerticalLayout {
         Tab tabPedidos = new Tab("Mis pedidos");
 
         Tabs tabs = new Tabs(tabExplorar, tabCarrito, tabPedidos);
-
-
         tabs.setWidth("auto");
         tabs.getStyle().set("margin-top", "0.5rem");
 
         HorizontalLayout tabsWrapper = new HorizontalLayout(tabs);
         tabsWrapper.setWidthFull();
-        tabsWrapper.setJustifyContentMode(JustifyContentMode.CENTER);
-        tabsWrapper.setAlignItems(Alignment.CENTER);
+        tabsWrapper.setJustifyContentMode(FlexComponent.JustifyContentMode.CENTER);
+        tabsWrapper.setAlignItems(FlexComponent.Alignment.CENTER);
 
         tabToContent.put(tabExplorar, buildExplorarContent());
         tabToContent.put(tabCarrito, buildCarritoContent());
@@ -77,12 +90,34 @@ public class ClienteHomeView extends VerticalLayout {
         tabs.addSelectedChangeListener(e -> showContent(e.getSelectedTab()));
     }
 
+    // BONUS: si entras a /home-cliente?restaurante=ID abre el popup
+    @Override
+    public void beforeEnter(BeforeEnterEvent event) {
+        String value = event.getLocation()
+                .getQueryParameters()
+                .getParameters()
+                .getOrDefault("restaurante", Collections.emptyList())
+                .stream()
+                .findFirst()
+                .orElse(null);
+
+        if (value == null) return;
+
+        try {
+            Long id = Long.valueOf(value);
+            if (cartaDialog == null || !cartaDialog.isOpened()
+                    || restauranteIdEnDialog == null || !restauranteIdEnDialog.equals(id)) {
+                openCartaDialog(id, false); // false = no reescribir URL (ya viene con param)
+            }
+        } catch (NumberFormatException ignored) { }
+    }
+
     private Component buildHeader() {
         VerticalLayout header = new VerticalLayout();
         header.setWidthFull();
         header.setPadding(false);
         header.setSpacing(false);
-        header.setAlignItems(Alignment.CENTER);
+        header.setAlignItems(FlexComponent.Alignment.CENTER);
 
         H1 title = new H1("EasiFood");
         title.getStyle()
@@ -120,7 +155,7 @@ public class ClienteHomeView extends VerticalLayout {
 
         HorizontalLayout searchWrapper = new HorizontalLayout(search);
         searchWrapper.setWidthFull();
-        searchWrapper.setJustifyContentMode(JustifyContentMode.CENTER);
+        searchWrapper.setJustifyContentMode(FlexComponent.JustifyContentMode.CENTER);
 
         // Contenedor tipo galería
         FlexLayout gallery = new FlexLayout();
@@ -129,7 +164,7 @@ public class ClienteHomeView extends VerticalLayout {
                 .set("display", "flex")
                 .set("flex-wrap", "wrap")
                 .set("gap", "16px")
-                .set("justify-content", "center"); // ✅ centra las cards si hay hueco
+                .set("justify-content", "center");
 
         // Datos
         List<Restaurante> all = restauranteService.findAll();
@@ -182,7 +217,7 @@ public class ClienteHomeView extends VerticalLayout {
 
         // Responsive width
         card.getStyle()
-                .set("flex", "1 1 calc(33.333% - 16px)") // desktop
+                .set("flex", "1 1 calc(33.333% - 16px)")
                 .set("max-width", "calc(33.333% - 16px)")
                 .set("min-width", "260px")
                 .set("border-radius", "18px")
@@ -220,7 +255,8 @@ public class ClienteHomeView extends VerticalLayout {
         meta.getStyle().set("opacity", "0.75");
         meta.getStyle().set("font-size", "0.9rem");
 
-        Button ver = new Button("Ver carta", e -> UI.getCurrent().navigate("cliente-restaurante/" + r.getId()));
+        // ✅ Popup en vez de navegar
+        Button ver = new Button("Ver carta", e -> openCartaDialog(r.getId(), true));
         ver.setWidthFull();
         ver.getStyle()
                 .set("margin-top", "0.75rem")
@@ -231,6 +267,69 @@ public class ClienteHomeView extends VerticalLayout {
         body.add(name, direccion, meta, ver);
         card.add(img, body);
         return card;
+    }
+
+    private void openCartaDialog(Long restauranteId, boolean updateUrl) {
+
+        if (cartaDialog != null && cartaDialog.isOpened()
+                && restauranteIdEnDialog != null
+                && restauranteIdEnDialog.equals(restauranteId)) {
+            return;
+        }
+
+        if (cartaDialog != null && cartaDialog.isOpened()) {
+            cartaDialog.close();
+        }
+
+        restauranteIdEnDialog = restauranteId;
+
+        cartaDialog = new Dialog();
+        cartaDialog.setModal(true);
+        cartaDialog.setDraggable(false);
+        cartaDialog.setResizable(false);
+
+        cartaDialog.setWidth("min(1000px, 92vw)");
+        cartaDialog.setHeight("min(720px, 90vh)");
+
+        // Botón cerrar
+        Button close = new Button(new Icon(VaadinIcon.CLOSE), e -> cartaDialog.close());
+
+        HorizontalLayout header = new HorizontalLayout(close);
+        header.setWidthFull();
+        header.setJustifyContentMode(FlexComponent.JustifyContentMode.END);
+
+        // 🔥 AQUÍ VA LA LÍNEA QUE PREGUNTAS
+        Component carta = new ClienteRestauranteContent(
+                restauranteId,
+                restauranteService,
+                productoService
+        );
+
+        VerticalLayout wrapper = new VerticalLayout(header, carta);
+        wrapper.setSizeFull();
+        wrapper.setPadding(false);
+        wrapper.setSpacing(false);
+
+        cartaDialog.add(wrapper);
+
+        cartaDialog.addDialogCloseActionListener(e -> clearRestauranteQueryParam());
+
+        if (updateUrl) {
+            UI.getCurrent().navigate(
+                    "home-cliente",
+                    QueryParameters.simple(Map.of("restaurante", String.valueOf(restauranteId)))
+            );
+        }
+
+        cartaDialog.open();
+    }
+
+    private void clearRestauranteQueryParam() {
+        restauranteIdEnDialog = null;
+        UI ui = UI.getCurrent();
+        if (ui != null) {
+            ui.navigate("home-cliente");
+        }
     }
 
     private String safe(String s) {
