@@ -1,10 +1,45 @@
-package com.easifood.app.repository;
+
+package com.easifood.app.service;
 
 import com.easifood.app.model.Empleado;
 import com.easifood.app.model.Restaurante;
-import org.springframework.data.jpa.repository.JpaRepository;
+import com.easifood.app.repository.EmpleadoRepository;
+import org.springframework.stereotype.Service;
 import java.util.List;
 
-public interface EmpleadoRepository extends JpaRepository<Empleado, Long> {
-    List<Empleado> findByRestaurante(Restaurante restaurante);
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+
+@Service
+public class EmpleadoService {
+
+    private final EmpleadoRepository empleadoRepository;
+
+    public EmpleadoService(EmpleadoRepository empleadoRepository) {
+        this.empleadoRepository = empleadoRepository;
+    }
+
+    public List<Empleado> empleadosDelRestaurante(Restaurante restaurante) {
+        return empleadoRepository.findByRestaurante(restaurante);
+    }
+
+    public Empleado guardar(Empleado empleado) {
+        return empleadoRepository.save(empleado);
+    }
+
+    public Empleado findFirst() {
+        return empleadoRepository.findAll()
+                .stream()
+                .findFirst()
+                .orElse(null);
+    }
+
+    public Empleado empleadoActual() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated()) {
+            return null;
+        }
+        return empleadoRepository.findByCorreo(auth.getName()).orElse(null);
+    }
+
 }
