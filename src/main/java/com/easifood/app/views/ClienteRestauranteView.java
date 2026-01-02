@@ -1,7 +1,8 @@
 package com.easifood.app.views;
 
-import com.easifood.app.service.RestauranteService;
+import com.easifood.app.service.CarritoService;
 import com.easifood.app.service.ProductoService;
+import com.easifood.app.service.RestauranteService;
 import com.easifood.app.views.components.ClienteRestauranteContent;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
@@ -16,10 +17,14 @@ public class ClienteRestauranteView extends VerticalLayout implements BeforeEnte
 
     private final RestauranteService restauranteService;
     private final ProductoService productoService;
+    private final CarritoService carritoService;
 
-    public ClienteRestauranteView(RestauranteService restauranteService, ProductoService productoService) {
+    public ClienteRestauranteView(RestauranteService restauranteService,
+                                  ProductoService productoService,
+                                  CarritoService carritoService) {
         this.restauranteService = restauranteService;
         this.productoService = productoService;
+        this.carritoService = carritoService;
 
         setSizeFull();
         setPadding(true);
@@ -48,8 +53,19 @@ public class ClienteRestauranteView extends VerticalLayout implements BeforeEnte
             return;
         }
 
-        // ✅ Mismo contenido que el popup (sin duplicar código)
-        add(new ClienteRestauranteContent(id, restauranteService, productoService));
+        // Evita duplicados si se re-entra
+        getChildren()
+                .filter(c -> c instanceof ClienteRestauranteContent)
+                .findFirst()
+                .ifPresent(this::remove);
 
+        // ✅ Mismo contenido que el popup (sin duplicar código)
+        add(new ClienteRestauranteContent(
+                id,
+                restauranteService,
+                productoService,
+                carritoService,
+                () -> { /* aquí no hace falta refrescar nada */ }
+        ));
     }
 }

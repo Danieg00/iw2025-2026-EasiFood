@@ -2,15 +2,18 @@ package com.easifood.app.views.components;
 
 import com.easifood.app.model.Producto;
 import com.easifood.app.model.Restaurante;
+import com.easifood.app.service.CarritoService;
 import com.easifood.app.service.ProductoService;
 import com.easifood.app.service.RestauranteService;
-import com.vaadin.flow.component.html.H2;
-import com.vaadin.flow.component.html.H3;
-import com.vaadin.flow.component.html.Image;
-import com.vaadin.flow.component.html.Paragraph;
-import com.vaadin.flow.component.html.Span;
-import com.vaadin.flow.component.orderedlayout.FlexLayout;
-import com.vaadin.flow.component.orderedlayout.VerticalLayout;
+import com.vaadin.flow.component.button.Button;
+import com.vaadin.flow.component.button.ButtonVariant;
+import com.vaadin.flow.component.dialog.Dialog;
+import com.vaadin.flow.component.html.*;
+import com.vaadin.flow.component.icon.Icon;
+import com.vaadin.flow.component.icon.VaadinIcon;
+import com.vaadin.flow.component.notification.Notification;
+import com.vaadin.flow.component.orderedlayout.*;
+import com.vaadin.flow.component.orderedlayout.FlexComponent;
 
 import java.text.NumberFormat;
 import java.util.List;
@@ -18,9 +21,19 @@ import java.util.Locale;
 
 public class ClienteRestauranteContent extends VerticalLayout {
 
+    private final CarritoService carritoService;
+    private final Runnable onCartChange;
+    private final Long restauranteId;
+
     public ClienteRestauranteContent(Long restauranteId,
                                      RestauranteService restauranteService,
-                                     ProductoService productoService) {
+                                     ProductoService productoService,
+                                     CarritoService carritoService,
+                                     Runnable onCartChange) {
+
+        this.carritoService = carritoService;
+        this.onCartChange = onCartChange;
+        this.restauranteId = restauranteId;
 
         setSizeFull();
         setPadding(true);
@@ -32,14 +45,8 @@ public class ClienteRestauranteContent extends VerticalLayout {
             return;
         }
 
-        // ==========================
-        // HEADER RESTAURANTE (IGUAL)
-        // ==========================
         add(buildRestauranteHeader(r));
 
-        // ==========================
-        // PRODUCTOS
-        // ==========================
         List<Producto> productos = productoService.productosDelRestaurante(r);
 
         H3 subtitulo = new H3("Productos");
@@ -55,7 +62,6 @@ public class ClienteRestauranteContent extends VerticalLayout {
 
         NumberFormat eur = NumberFormat.getCurrencyInstance(new Locale("es", "ES"));
 
-        // 👉 GRID FLEXIBLE (CLAVE)
         FlexLayout productosGrid = new FlexLayout();
         productosGrid.setWidthFull();
         productosGrid.getStyle()
@@ -103,8 +109,6 @@ public class ClienteRestauranteContent extends VerticalLayout {
         VerticalLayout card = new VerticalLayout();
         card.setPadding(false);
         card.setSpacing(false);
-
-        // 👉 CLAVE: ancho fijo y no estirarse
         card.setWidth("300px");
 
         card.getStyle()
@@ -116,15 +120,11 @@ public class ClienteRestauranteContent extends VerticalLayout {
                 .set("flex-direction", "column")
                 .set("transition", "transform 0.15s ease");
 
-        // Hover suave
         card.getElement().addEventListener("mouseenter",
                 e -> card.getStyle().set("transform", "translateY(-3px)"));
         card.getElement().addEventListener("mouseleave",
                 e -> card.getStyle().set("transform", "none"));
 
-        // ==========================
-        // FOTO PRODUCTO
-        // ==========================
         String imgUrl = (p.getImagenUrl() != null && !p.getImagenUrl().isBlank())
                 ? p.getImagenUrl()
                 : "/images/productos/default.jpg";
@@ -153,7 +153,54 @@ public class ClienteRestauranteContent extends VerticalLayout {
                 .set("opacity", "0.7")
                 .set("font-size", "0.9rem");
 
-        card.add(prodImg, nombre, precio, desc, ing);
+        Button add = new Button("Añadir", new Icon(VaadinIcon.CART_O));
+        add.setWidthFull();
+        add.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
+        add.getStyle().set("margin-top", "0.7rem");
+
+        add.addClickListener(e -> {
+            try {
+                carritoService.add(p, restauranteId);
+                Notification.show("Añadido al carrito: " + safe(p.getNombre()), 1500,
+                        Notification.Position.BOTTOM_CENTER);
+                if (onCartChange != null) onCartChange.run();
+
+            } catch (IllegalStateException ex) {
+                if ("CARRITO_OTRO_RESTAURANTE".equals(ex.getMessage())) {
+
+                    Dialog d = new Dialog();
+                    d.setHeaderTitle("Carrito de otro restaurante");
+
+                    Span msg = new Span("Tu carrito ya tiene productos de otro restaurante. ¿Quieres vaciarlo y cambiar?");
+                    msg.getStyle().set("opacity", "0.85");
+
+                    Button cancelar = new Button("Cancelar", ev -> d.close());
+
+                    Button vaciarYAgregar = new Button("Vaciar y añadir", ev -> {
+                        carritoService.clear();
+                        carritoService.add(p, restauranteId);
+                        if (onCartChange != null) onCartChange.run();
+                        d.close();
+                        Notification.show("Carrito cambiado y producto añadido", 1500,
+                                Notification.Position.BOTTOM_CENTER);
+                    });
+                    vaciarYAgregar.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
+
+                    HorizontalLayout actions = new HorizontalLayout(cancelar, vaciarYAgregar);
+                    actions.setJustifyContentMode(FlexComponent.JustifyContentMode.END);
+                    actions.setWidthFull();
+
+                    VerticalLayout body = new VerticalLayout(msg, actions);
+                    body.setPadding(false);
+                    body.setSpacing(true);
+
+                    d.add(body);
+                    d.open();
+                }
+            }
+        });
+
+        card.add(prodImg, nombre, precio, desc, ing, add);
         return card;
     }
 

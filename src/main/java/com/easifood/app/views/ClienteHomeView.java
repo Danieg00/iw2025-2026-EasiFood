@@ -1,7 +1,8 @@
 package com.easifood.app.views;
 
-import com.easifood.app.model.Usuario;
 import com.easifood.app.model.Restaurante;
+import com.easifood.app.model.Usuario;
+import com.easifood.app.service.CarritoService;
 import com.easifood.app.service.ProductoService;
 import com.easifood.app.service.RestauranteService;
 import com.easifood.app.service.UsuarioService;
@@ -13,16 +14,10 @@ import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.contextmenu.ContextMenu;
 import com.vaadin.flow.component.dialog.Dialog;
-import com.vaadin.flow.component.html.H1;
-import com.vaadin.flow.component.html.H2;
-import com.vaadin.flow.component.html.Paragraph;
-import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.html.*;
 import com.vaadin.flow.component.icon.Icon;
 import com.vaadin.flow.component.icon.VaadinIcon;
-import com.vaadin.flow.component.orderedlayout.FlexComponent;
-import com.vaadin.flow.component.orderedlayout.FlexLayout;
-import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
-import com.vaadin.flow.component.orderedlayout.VerticalLayout;
+import com.vaadin.flow.component.orderedlayout.*;
 import com.vaadin.flow.component.tabs.Tab;
 import com.vaadin.flow.component.tabs.Tabs;
 import com.vaadin.flow.component.textfield.TextField;
@@ -31,11 +26,13 @@ import com.vaadin.flow.router.BeforeEnterObserver;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.QueryParameters;
 import com.vaadin.flow.router.Route;
+import com.vaadin.flow.spring.security.AuthenticationContext;
 import jakarta.annotation.security.RolesAllowed;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import com.vaadin.flow.spring.security.AuthenticationContext;
 
+import java.math.BigDecimal;
+import java.text.NumberFormat;
 import java.util.*;
 
 @PageTitle("Área Cliente")
@@ -47,6 +44,7 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
     private final ProductoService productoService;
     private final UsuarioService usuarioService;
     private final AuthenticationContext authenticationContext;
+    private final CarritoService carritoService;
 
     private final VerticalLayout content = new VerticalLayout();
     private final Map<Tab, Component> tabToContent = new HashMap<>();
@@ -54,14 +52,21 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
     private Dialog cartaDialog;
     private Long restauranteIdEnDialog;
 
+    // Tabs / UI carrito
+    private Tab tabCarrito;
+    private Span carritoBadge;
+    private Component carritoContent;
+
     public ClienteHomeView(RestauranteService restauranteService,
                            ProductoService productoService,
                            UsuarioService usuarioService,
-                           AuthenticationContext authenticationContext) {
+                           AuthenticationContext authenticationContext,
+                           CarritoService carritoService) {
         this.restauranteService = restauranteService;
         this.productoService = productoService;
         this.usuarioService = usuarioService;
         this.authenticationContext = authenticationContext;
+        this.carritoService = carritoService;
 
         setSizeFull();
         setPadding(true);
@@ -69,8 +74,22 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
 
         add(buildHeader());
 
+        // ==========================
+        // TABS
+        // ==========================
         Tab tabExplorar = new Tab("Explorar");
-        Tab tabCarrito = new Tab("Carrito");
+
+        carritoBadge = new Span();
+        carritoBadge.getStyle()
+                .set("margin-left", "8px")
+                .set("padding", "2px 8px")
+                .set("border-radius", "999px")
+                .set("background", "var(--lumo-contrast-10pct)")
+                .set("font-size", "0.85rem")
+                .set("font-weight", "700");
+
+        tabCarrito = new Tab(new Span("Carrito"), carritoBadge);
+
         Tab tabPedidos = new Tab("Mis pedidos");
 
         Tabs tabs = new Tabs(tabExplorar, tabCarrito, tabPedidos);
@@ -83,7 +102,10 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
         tabsWrapper.setAlignItems(FlexComponent.Alignment.CENTER);
 
         tabToContent.put(tabExplorar, buildExplorarContent());
-        tabToContent.put(tabCarrito, buildCarritoContent());
+
+        carritoContent = buildCarritoContent();
+        tabToContent.put(tabCarrito, carritoContent);
+
         tabToContent.put(tabPedidos, buildPedidosContent());
 
         content.setSizeFull();
@@ -93,6 +115,7 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
         add(tabsWrapper, content);
         expand(content);
 
+        updateCarritoBadge();
         showContent(tabExplorar);
 
         tabs.addSelectedChangeListener(e -> showContent(e.getSelectedTab()));
@@ -212,10 +235,40 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
     }
 
     private void showContent(Tab selected) {
+        // ✅ Si entro al Carrito, SIEMPRE reconstruyo el contenido (para no usar el viejo “vacío”)
+        if (selected == tabCarrito) {
+            carritoContent = buildCarritoContent();
+            tabToContent.put(tabCarrito, carritoContent);
+        }
+
         content.removeAll();
         Component c = tabToContent.get(selected);
         if (c != null) content.add(c);
     }
+
+    // ==========================
+    // BADGE CARRITO
+    // ==========================
+    private void updateCarritoBadge() {
+        int n = carritoService.totalUnidades();
+        carritoBadge.setText(String.valueOf(n));
+        carritoBadge.getStyle().set("opacity", n > 0 ? "1" : "0.6");
+    }
+
+    private void refreshCarritoViewIfVisible() {
+        Component current = content.getChildren().findFirst().orElse(null);
+        if (current == carritoContent) {
+            carritoContent = buildCarritoContent();
+            tabToContent.put(tabCarrito, carritoContent);
+            showContent(tabCarrito);
+        }
+    }
+
+    private void refreshCarritoCache() {
+        carritoContent = buildCarritoContent();
+        tabToContent.put(tabCarrito, carritoContent);
+    }
+
 
     // ==========================
     // EXPLORAR
@@ -305,8 +358,7 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
                 ? r.getImagenUrl()
                 : "/images/restaurantes/default.jpg";
 
-        com.vaadin.flow.component.html.Image img =
-                new com.vaadin.flow.component.html.Image(url, "Foto " + safe(r.getNombre()));
+        Image img = new Image(url, "Foto " + safe(r.getNombre()));
         img.setWidthFull();
         img.setHeight("160px");
         img.getStyle().set("object-fit", "cover");
@@ -374,7 +426,13 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
         Component carta = new ClienteRestauranteContent(
                 restauranteId,
                 restauranteService,
-                productoService
+                productoService,
+                carritoService,
+                () -> {
+                    updateCarritoBadge();
+                    refreshCarritoCache();
+                }
+
         );
 
         VerticalLayout wrapper = new VerticalLayout(header, carta);
@@ -410,16 +468,139 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
     }
 
     // ==========================
-    // TABs placeholder
+    // TAB CARRITO (REAL)
     // ==========================
     private Component buildCarritoContent() {
         VerticalLayout layout = new VerticalLayout();
         layout.setSizeFull();
-        layout.add(new H1("Carrito"));
-        layout.add(new Span("Pendiente: añadir/quitar productos, elegir tipo de pedido (domicilio / recoger / mesa) y pagar."));
+        layout.setPadding(true);
+        layout.setSpacing(true);
+
+        Long restId = carritoService.getRestauranteId();
+        if (restId != null) {
+            Span rest = new Span("Restaurante del carrito: " + restId);
+            rest.getStyle().set("opacity", "0.7");
+            layout.add(rest);
+        }
+        H1 title = new H1("Carrito");
+        title.getStyle().set("margin", "0.25rem 0 0.5rem 0");
+        layout.add(title);
+
+        List<CarritoService.Item> items = carritoService.items();
+
+        if (items.isEmpty()) {
+            Span empty = new Span("Tu carrito está vacío.");
+            empty.getStyle().set("opacity", "0.7");
+            layout.add(empty);
+            return layout;
+        }
+
+        NumberFormat eur = NumberFormat.getCurrencyInstance(new Locale("es", "ES"));
+
+        VerticalLayout list = new VerticalLayout();
+        list.setWidthFull();
+        list.setPadding(false);
+        list.setSpacing(false);
+
+        for (CarritoService.Item it : items) {
+            var p = it.getProducto();
+
+            HorizontalLayout row = new HorizontalLayout();
+            row.setWidthFull();
+            row.setAlignItems(FlexComponent.Alignment.CENTER);
+            row.getStyle()
+                    .set("padding", "10px")
+                    .set("border-radius", "12px")
+                    .set("background", "var(--lumo-base-color)")
+                    .set("box-shadow", "var(--lumo-box-shadow-xs)")
+                    .set("margin-bottom", "10px");
+
+            VerticalLayout info = new VerticalLayout();
+            info.setPadding(false);
+            info.setSpacing(false);
+
+            H3 name = new H3(safe(p.getNombre()));
+            name.getStyle().set("margin", "0");
+
+            Span unit = new Span("Unidad: " + (p.getPrecio() != null ? eur.format(p.getPrecio()) : "-"));
+            unit.getStyle().set("opacity", "0.75");
+
+            info.add(name, unit);
+
+            Button minus = new Button(new Icon(VaadinIcon.MINUS));
+            Button plus = new Button(new Icon(VaadinIcon.PLUS));
+
+            Span qty = new Span(String.valueOf(it.getCantidad()));
+            qty.getStyle()
+                    .set("min-width", "28px")
+                    .set("text-align", "center")
+                    .set("font-weight", "700");
+
+            HorizontalLayout qtyBox = new HorizontalLayout(minus, qty, plus);
+            qtyBox.setAlignItems(FlexComponent.Alignment.CENTER);
+            qtyBox.setSpacing(true);
+
+            BigDecimal precio = p.getPrecio() != null ? p.getPrecio() : BigDecimal.ZERO;
+            Span subtotal = new Span("Subtotal: " + eur.format(precio.multiply(BigDecimal.valueOf(it.getCantidad()))));
+            subtotal.getStyle().set("font-weight", "700");
+
+            Button remove = new Button(new Icon(VaadinIcon.TRASH));
+            remove.addThemeVariants(ButtonVariant.LUMO_ERROR);
+
+            minus.addClickListener(e -> {
+                carritoService.dec(p);
+                updateCarritoBadge();
+                refreshCarritoViewIfVisible();
+            });
+
+            plus.addClickListener(e -> {
+                carritoService.add(p);
+                updateCarritoBadge();
+                refreshCarritoViewIfVisible();
+            });
+
+            remove.addClickListener(e -> {
+                carritoService.remove(p.getId());
+                updateCarritoBadge();
+                refreshCarritoViewIfVisible();
+            });
+
+            row.add(info);
+            row.expand(info);
+            row.add(qtyBox, subtotal, remove);
+
+            list.add(row);
+        }
+
+        HorizontalLayout footer = new HorizontalLayout();
+        footer.setWidthFull();
+        footer.setAlignItems(FlexComponent.Alignment.CENTER);
+        footer.setJustifyContentMode(FlexComponent.JustifyContentMode.BETWEEN);
+
+        Span total = new Span("Total: " + eur.format(carritoService.totalPrecio()));
+        total.getStyle().set("font-weight", "800").set("font-size", "1.1rem");
+
+        Button clear = new Button("Vaciar carrito", new Icon(VaadinIcon.CLOSE_SMALL));
+        clear.addThemeVariants(ButtonVariant.LUMO_CONTRAST);
+
+        Button pagar = new Button("Continuar (pendiente pago)");
+        pagar.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
+
+        clear.addClickListener(e -> {
+            carritoService.clear();
+            updateCarritoBadge();
+            refreshCarritoViewIfVisible();
+        });
+
+        footer.add(total, new HorizontalLayout(clear, pagar));
+
+        layout.add(list, footer);
         return layout;
     }
 
+    // ==========================
+    // TAB PEDIDOS (placeholder)
+    // ==========================
     private Component buildPedidosContent() {
         VerticalLayout layout = new VerticalLayout();
         layout.setSizeFull();
@@ -431,7 +612,7 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
     // ==========================
     // “stub” para centrar el título
     // ==========================
-    private static class DivStub extends com.vaadin.flow.component.html.Div {
+    private static class DivStub extends Div {
         DivStub(int px) {
             setWidth(px + "px");
             setHeight("1px");
