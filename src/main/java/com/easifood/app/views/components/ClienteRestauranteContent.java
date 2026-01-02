@@ -9,6 +9,7 @@ import com.vaadin.flow.component.html.H3;
 import com.vaadin.flow.component.html.Image;
 import com.vaadin.flow.component.html.Paragraph;
 import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.orderedlayout.FlexLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 
 import java.text.NumberFormat;
@@ -31,10 +32,14 @@ public class ClienteRestauranteContent extends VerticalLayout {
             return;
         }
 
-        // ✅ 1) HEADER SIEMPRE
+        // ==========================
+        // HEADER RESTAURANTE (IGUAL)
+        // ==========================
         add(buildRestauranteHeader(r));
 
-        // ✅ 2) PRODUCTOS (si hay)
+        // ==========================
+        // PRODUCTOS
+        // ==========================
         List<Producto> productos = productoService.productosDelRestaurante(r);
 
         H3 subtitulo = new H3("Productos");
@@ -50,9 +55,20 @@ public class ClienteRestauranteContent extends VerticalLayout {
 
         NumberFormat eur = NumberFormat.getCurrencyInstance(new Locale("es", "ES"));
 
+        // 👉 GRID FLEXIBLE (CLAVE)
+        FlexLayout productosGrid = new FlexLayout();
+        productosGrid.setWidthFull();
+        productosGrid.getStyle()
+                .set("display", "flex")
+                .set("flex-wrap", "wrap")
+                .set("gap", "16px")
+                .set("margin-top", "0.5rem");
+
         for (Producto p : productos) {
-            add(buildProductoCard(p, eur));
+            productosGrid.add(buildProductoCard(p, eur));
         }
+
+        add(productosGrid);
     }
 
     private VerticalLayout buildRestauranteHeader(Restaurante r) {
@@ -88,11 +104,37 @@ public class ClienteRestauranteContent extends VerticalLayout {
         card.setPadding(false);
         card.setSpacing(false);
 
+        // 👉 CLAVE: ancho fijo y no estirarse
+        card.setWidth("300px");
+
         card.getStyle()
                 .set("border-radius", "14px")
                 .set("padding", "12px")
                 .set("background", "var(--lumo-base-color)")
-                .set("box-shadow", "var(--lumo-box-shadow-xs)");
+                .set("box-shadow", "var(--lumo-box-shadow-xs)")
+                .set("display", "flex")
+                .set("flex-direction", "column")
+                .set("transition", "transform 0.15s ease");
+
+        // Hover suave
+        card.getElement().addEventListener("mouseenter",
+                e -> card.getStyle().set("transform", "translateY(-3px)"));
+        card.getElement().addEventListener("mouseleave",
+                e -> card.getStyle().set("transform", "none"));
+
+        // ==========================
+        // FOTO PRODUCTO
+        // ==========================
+        String imgUrl = (p.getImagenUrl() != null && !p.getImagenUrl().isBlank())
+                ? p.getImagenUrl()
+                : "/images/productos/default.jpg";
+
+        Image prodImg = new Image(imgUrl, "Foto " + safe(p.getNombre()));
+        prodImg.setWidthFull();
+        prodImg.setHeight("160px");
+        prodImg.getStyle().set("border-radius", "12px");
+        prodImg.getStyle().set("object-fit", "cover");
+        prodImg.getStyle().set("margin-bottom", "0.6rem");
 
         H3 nombre = new H3(safe(p.getNombre()));
         nombre.getStyle().set("margin", "0");
@@ -101,9 +143,17 @@ public class ClienteRestauranteContent extends VerticalLayout {
         precio.getStyle().set("font-weight", "700");
 
         Paragraph desc = new Paragraph(safe(p.getDescripcion()));
-        desc.getStyle().set("margin", "0.35rem 0 0 0").set("opacity", "0.8");
+        desc.getStyle()
+                .set("margin", "0.35rem 0 0 0")
+                .set("opacity", "0.8");
 
-        card.add(nombre, precio, desc);
+        Paragraph ing = new Paragraph("🧾 Ingredientes: " + safe(p.getIngredientes()));
+        ing.getStyle()
+                .set("margin", "0.25rem 0 0 0")
+                .set("opacity", "0.7")
+                .set("font-size", "0.9rem");
+
+        card.add(prodImg, nombre, precio, desc, ing);
         return card;
     }
 

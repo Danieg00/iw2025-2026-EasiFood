@@ -37,6 +37,11 @@ import com.vaadin.flow.server.auth.AnonymousAllowed;
 import jakarta.annotation.security.RolesAllowed;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import com.easifood.app.service.FileStorageService;
+import com.vaadin.flow.component.upload.Upload;
+import com.vaadin.flow.server.streams.UploadHandler;
+import com.vaadin.flow.component.UI;
+import java.io.ByteArrayInputStream;
 
 import java.util.List;
 
@@ -50,6 +55,7 @@ public class GerenteHomeView extends VerticalLayout {
     private final UsuarioRepository usuarioRepository;
     private final RestauranteRepository restauranteRepository;
     private final ProductoService productoService;
+    private final FileStorageService fileStorageService;
 
     private FlexLayout cardsContainer;
     private Restaurante restauranteActual;
@@ -59,11 +65,12 @@ public class GerenteHomeView extends VerticalLayout {
     private Tab tabProductos;
     private Button btnNuevo;
 
-    public GerenteHomeView(EmpleadoRepository empleadoRepository, UsuarioRepository usuarioRepository, RestauranteRepository restauranteRepository, ProductoService productoService) {
+    public GerenteHomeView(EmpleadoRepository empleadoRepository, UsuarioRepository usuarioRepository, RestauranteRepository restauranteRepository, ProductoService productoService, FileStorageService fileStorageService) {
         this.empleadoRepository = empleadoRepository;
         this.usuarioRepository = usuarioRepository;
         this.restauranteRepository = restauranteRepository;
         this.productoService = productoService;
+        this.fileStorageService = fileStorageService;
 
         setSizeFull();
         setPadding(true);
@@ -315,30 +322,122 @@ public class GerenteHomeView extends VerticalLayout {
     private void abrirEditorProducto(Producto producto) {
         Dialog dialog = new Dialog();
         dialog.setHeaderTitle(producto.getId() == null ? "Nuevo Plato" : "Editar Plato");
+        dialog.setWidth("720px");
+        dialog.setHeight("auto");
 
         FormLayout formLayout = new FormLayout();
+        formLayout.setWidthFull();
+
+        // 2 columnas en pantallas normales, 1 en móvil
+        formLayout.setResponsiveSteps(
+                new FormLayout.ResponsiveStep("0", 1),
+                new FormLayout.ResponsiveStep("600px", 2)
+        );
 
         TextField nombreField = new TextField("Nombre del Plato");
+        nombreField.setWidthFull();
+
         BigDecimalField precioField = new BigDecimalField("Precio (€)");
-        TextField imagenField = new TextField("URL Imagen");
-        imagenField.setPlaceholder("http://...");
+        precioField.setWidthFull();
 
         TextArea descripcionField = new TextArea("Descripción");
+        descripcionField.setWidthFull();
+        descripcionField.setMinHeight("110px");
 
-        // Campo específico para INGREDIENTES
         TextArea ingredientesField = new TextArea("Ingredientes (Lista)");
+        ingredientesField.setWidthFull();
+        ingredientesField.setMinHeight("110px");
         ingredientesField.setPlaceholder("Ej: Huevo, Harina, Leche, Cacahuetes...");
         ingredientesField.setHelperText("Separa los ingredientes por comas para filtrar alérgenos.");
 
-        formLayout.add(nombreField, precioField, imagenField, descripcionField, ingredientesField);
+        // ==========================
+        // ✅ BLOQUE IMAGEN (upload + preview) SIN DESCUIDRAR
+        // ==========================
+        Span labelImg = new Span("Imagen del producto");
+        labelImg.getStyle().set("font-weight", "600");
 
+        // Contenedor del bloque imagen
+        VerticalLayout imageBlock = new VerticalLayout();
+        imageBlock.setPadding(false);
+        imageBlock.setSpacing(false);
+        imageBlock.setWidthFull();
+        imageBlock.getStyle().set("row-gap", "0.4rem");
+
+        // Preview grande y COMPLETO (sin recortar)
+        Image preview = new Image();
+        preview.setVisible(false);
+        preview.setWidthFull();
+        preview.setHeight("260px"); // alto fijo para que no “salte” el layout
+        preview.getStyle()
+                .set("border-radius", "14px")
+                .set("background", "rgba(0,0,0,0.04)")
+                .set("object-fit", "contain"); // ✅ para ver la imagen completa
+
+        // Si el producto ya tiene imagen, mostrarla
+        if (producto.getImagenUrl() != null && !producto.getImagenUrl().isBlank()) {
+            preview.setSrc(producto.getImagenUrl());
+            preview.setVisible(true);
+        }
+
+        final String[] imagenUrlSubida = { producto.getImagenUrl() };
+        UI ui = UI.getCurrent();
+
+        Upload upload = new Upload(
+                UploadHandler.inMemory((metadata, bytes) -> {
+                    if (bytes == null || bytes.length == 0) return;
+
+                    String savedUrl = fileStorageService.saveProductImage(
+                            new java.io.ByteArrayInputStream(bytes),
+                            metadata.fileName()
+                    );
+
+                    imagenUrlSubida[0] = savedUrl;
+
+                    if (ui != null) {
+                        ui.access(() -> {
+                            preview.setSrc(savedUrl);
+                            preview.setVisible(true);
+                        });
+                    }
+                })
+        );
+
+        upload.setAcceptedFileTypes("image/jpeg", "image/png", "image/webp");
+        upload.setMaxFiles(1);
+        upload.setMaxFileSize(3 * 1024 * 1024); // 3MB
+        upload.setDropLabel(new Span("Arrastra la imagen aquí o pulsa para seleccionar"));
+        upload.setWidthFull();
+
+        // ✅ Montamos el bloque: label + upload + preview
+        imageBlock.add(labelImg, upload, preview);
+
+        // ==========================
+        // ✅ AÑADIR AL FORM (y hacemos que imagenBlock ocupe 2 columnas)
+        // ==========================
+        formLayout.add(nombreField, precioField);
+        formLayout.add(descripcionField, ingredientesField);
+
+        formLayout.add(imageBlock);
+        formLayout.setColspan(imageBlock, 2); // 👈 CLAVE: ocupa el ancho completo (2 columnas)
+
+        // ==========================
+        // BINDER
+        // ==========================
         Binder<Producto> binder = new Binder<>(Producto.class);
 
-        binder.forField(nombreField).asRequired("El nombre es obligatorio").bind(Producto::getNombre, Producto::setNombre);
-        binder.forField(precioField).asRequired().bind(Producto::getPrecio, Producto::setPrecio);
-        binder.forField(imagenField).bind(Producto::getImagenUrl, Producto::setImagenUrl);
-        binder.forField(descripcionField).bind(Producto::getDescripcion, Producto::setDescripcion);
-        binder.forField(ingredientesField).bind(Producto::getIngredientes, Producto::setIngredientes);
+        binder.forField(nombreField)
+                .asRequired("El nombre es obligatorio")
+                .bind(Producto::getNombre, Producto::setNombre);
+
+        binder.forField(precioField)
+                .asRequired("El precio es obligatorio")
+                .bind(Producto::getPrecio, Producto::setPrecio);
+
+        binder.forField(descripcionField)
+                .bind(Producto::getDescripcion, Producto::setDescripcion);
+
+        binder.forField(ingredientesField)
+                .bind(Producto::getIngredientes, Producto::setIngredientes);
 
         binder.readBean(producto);
 
@@ -346,10 +445,23 @@ public class GerenteHomeView extends VerticalLayout {
             try {
                 binder.writeBean(producto);
                 producto.setRestaurante(restauranteActual);
-                productoService.guardar(producto); // Usamos el servicio
+
+                // Imagen obligatoria solo en creación (si quieres)
+                if (producto.getId() == null &&
+                        (imagenUrlSubida[0] == null || imagenUrlSubida[0].isBlank())) {
+                    Notification.show("Debes subir una imagen del producto");
+                    return;
+                }
+
+                // Guardar imagen subida (si hay)
+                if (imagenUrlSubida[0] != null && !imagenUrlSubida[0].isBlank()) {
+                    producto.setImagenUrl(imagenUrlSubida[0]);
+                }
+
+                productoService.guardar(producto);
                 refrescarContenido();
                 dialog.close();
-                Notification.show("Producto actualizado correctamente");
+                Notification.show("Producto guardado correctamente");
             } catch (Exception ex) {
                 Notification.show("Error al guardar producto: " + ex.getMessage());
             }

@@ -47,7 +47,7 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
         // ===============================
         // FONDO
         // ===============================
-        getStyle().set("background-image", "url('/images/food-bg.png')");
+        getStyle().set("background-image", "url('/images/login/food-bg.png')");
         getStyle().set("background-size", "cover");
         getStyle().set("background-position", "center");
         getStyle().set("background-repeat", "no-repeat");
