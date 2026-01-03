@@ -20,34 +20,55 @@ public class UserMenuBar extends HorizontalLayout {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String displayName = resolveDisplayName(auth);
 
+        // ==========================
+        // AVATAR
+        // ==========================
         Avatar avatar = new Avatar(displayName);
         avatar.setAbbreviation(initials(displayName));
         avatar.setHeight("38px");
         avatar.setWidth("38px");
 
-        // (Opcional) si tienes URL de imagen del usuario:
-        // avatar.setImage("https://...");
+        // 👉 manita
+        avatar.getStyle().set("cursor", "pointer");
 
+        // ==========================
+        // MENU BAR
+        // ==========================
         MenuBar menuBar = new MenuBar();
         menuBar.setOpenOnHover(false);
-        menuBar.getStyle().set("padding", "0");
-        menuBar.getStyle().set("background", "transparent");
+        menuBar.getStyle()
+                .set("padding", "0")
+                .set("background", "transparent");
 
         MenuItem root = menuBar.addItem(avatar);
+
+        // 👉 manita también en el trigger
+        root.getElement().getStyle().set("cursor", "pointer");
+
         SubMenu sub = root.getSubMenu();
 
-        sub.addItem("Mi perfil", e -> UI.getCurrent().navigate("perfil"));
+        // ==========================
+        // ITEMS
+        // ==========================
+        MenuItem perfil = sub.addItem("Mi perfil", e ->
+                UI.getCurrent().navigate("perfil")
+        );
+
+        MenuItem logout = sub.addItem("Cerrar sesión", e ->
+                authContext.logout()
+        );
+
+        // 👉 manita en items
+        perfil.getElement().getStyle().set("cursor", "pointer");
+        logout.getElement().getStyle().set("cursor", "pointer");
 
         sub.addSeparator();
-
-        sub.addItem("Cerrar sesión", e -> authContext.logout());
 
         add(menuBar);
     }
 
     private String resolveDisplayName(Authentication auth) {
         if (auth == null || auth.getPrincipal() == null) return "Usuario";
-        // Normalmente principal es el username (email). Ajusta si tienes UserDetails propio.
         String principal = String.valueOf(auth.getPrincipal());
         if ("anonymousUser".equals(principal)) return "Usuario";
         return principal;

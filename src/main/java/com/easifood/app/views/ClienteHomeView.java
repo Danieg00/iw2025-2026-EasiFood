@@ -58,6 +58,8 @@ public class ClienteHomeView extends VerticalLayout {
         // ==========================
         Tab tabExplorar = new Tab("Explorar");
         Tab tabPedidos = new Tab("Mis pedidos");
+        tabExplorar.getStyle().set("cursor", "pointer");
+        tabPedidos.getStyle().set("cursor", "pointer");
 
         Tabs tabs = new Tabs(tabExplorar, tabPedidos);
         tabs.setWidth("auto");

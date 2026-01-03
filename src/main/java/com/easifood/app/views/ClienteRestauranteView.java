@@ -91,6 +91,11 @@ public class ClienteRestauranteView extends VerticalLayout implements BeforeEnte
         add(backdrop, sheet, carritoBar);
     }
 
+    // ✅ helper para “manita” en todos los botones
+    private void makePointer(Button b) {
+        if (b != null) b.getStyle().set("cursor", "pointer");
+    }
+
     private HorizontalLayout buildTopBar() {
         HorizontalLayout top = new HorizontalLayout();
         top.setWidthFull();
@@ -98,9 +103,36 @@ public class ClienteRestauranteView extends VerticalLayout implements BeforeEnte
         top.setAlignItems(Alignment.CENTER);
         top.setJustifyContentMode(JustifyContentMode.BETWEEN);
 
-        Button back = new Button("⬅ Volver", e -> UI.getCurrent().navigate("home-cliente"));
-        top.add(back);
+        Button back = new Button(new Icon(VaadinIcon.ARROW_LEFT));
+        back.addThemeVariants(ButtonVariant.LUMO_TERTIARY, ButtonVariant.LUMO_ICON);
+        makePointer(back);
 
+        back.getStyle()
+                .set("border-radius", "999px")
+                .set("width", "42px")
+                .set("height", "42px")
+                .set("padding", "0")
+                .set("transition", "background-color 160ms ease, box-shadow 160ms ease");
+
+        back.getElement().setProperty("title", "Volver");
+        back.getElement().setAttribute("aria-label", "Volver");
+
+        // Hover visual (halo circular)
+        back.getElement().addEventListener("mouseenter", e ->
+                back.getStyle()
+                        .set("background", "var(--lumo-contrast-10pct)")
+                        .set("box-shadow", "0 0 0 6px var(--lumo-contrast-10pct)")
+        );
+
+        back.getElement().addEventListener("mouseleave", e ->
+                back.getStyle()
+                        .set("background", "transparent")
+                        .set("box-shadow", "none")
+        );
+
+        back.addClickListener(e -> UI.getCurrent().navigate("home-cliente"));
+
+        top.add(back);
         return top;
     }
 
@@ -235,6 +267,7 @@ public class ClienteRestauranteView extends VerticalLayout implements BeforeEnte
         add.setWidthFull();
         add.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
         add.getStyle().set("margin-top", "0.7rem");
+        makePointer(add);
 
         add.addClickListener(e -> {
             carritoService.add(restauranteId, p);
@@ -279,6 +312,7 @@ public class ClienteRestauranteView extends VerticalLayout implements BeforeEnte
         btnCarrito = new Button("Ver carrito", new Icon(VaadinIcon.CHEVRON_UP));
         btnCarrito.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
         btnCarrito.getStyle().set("font-weight", "700");
+        makePointer(btnCarrito);
         btnCarrito.addClickListener(e -> openSheet());
 
         bar.add(resumen, btnCarrito);
@@ -333,8 +367,32 @@ public class ClienteRestauranteView extends VerticalLayout implements BeforeEnte
                 .set("margin", "10px auto 6px auto");
 
         Button close = new Button(new Icon(VaadinIcon.CLOSE_SMALL), e -> closeSheet());
-        close.addThemeVariants(ButtonVariant.LUMO_TERTIARY);
-        close.getStyle().set("margin-left", "auto");
+        close.addThemeVariants(ButtonVariant.LUMO_TERTIARY, ButtonVariant.LUMO_ICON);
+        close.getStyle()
+                .set("margin-left", "auto")
+                .set("border-radius", "999px")
+                .set("width", "42px")
+                .set("height", "42px")
+                .set("padding", "0")
+                .set("cursor", "pointer")
+                .set("transition", "background-color 160ms ease, box-shadow 160ms ease");
+
+        close.getElement().setProperty("title", "Cerrar");
+        close.getElement().setAttribute("aria-label", "Cerrar");
+
+        // Hover visual (halo circular)
+        close.getElement().addEventListener("mouseenter", e ->
+                close.getStyle()
+                        .set("background", "var(--lumo-contrast-10pct)")
+                        .set("box-shadow", "0 0 0 6px var(--lumo-contrast-10pct)")
+        );
+
+        close.getElement().addEventListener("mouseleave", e ->
+                close.getStyle()
+                        .set("background", "transparent")
+                        .set("box-shadow", "none")
+        );
+        makePointer(close);
 
         H3 title = new H3("Tu carrito");
         title.getStyle().set("margin", "0");
@@ -361,11 +419,13 @@ public class ClienteRestauranteView extends VerticalLayout implements BeforeEnte
             closeSheet();
         });
         vaciar.addThemeVariants(ButtonVariant.LUMO_ERROR);
+        makePointer(vaciar);
 
         Button continuar = new Button("Continuar", e ->
                 UI.getCurrent().navigate("checkout/" + restauranteId)
         );
         continuar.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
+        makePointer(continuar);
 
         HorizontalLayout footerActions = new HorizontalLayout(vaciar, continuar);
         footerActions.setSpacing(true);
@@ -459,6 +519,11 @@ public class ClienteRestauranteView extends VerticalLayout implements BeforeEnte
 
             Button minus = new Button(new Icon(VaadinIcon.MINUS));
             Button plus = new Button(new Icon(VaadinIcon.PLUS));
+            Button remove = new Button(new Icon(VaadinIcon.TRASH));
+
+            makePointer(minus);
+            makePointer(plus);
+            makePointer(remove);
 
             Span qty = new Span(String.valueOf(it.getCantidad()));
             qty.getStyle().set("min-width", "28px").set("text-align", "center").set("font-weight", "800");
@@ -470,7 +535,6 @@ public class ClienteRestauranteView extends VerticalLayout implements BeforeEnte
             Span subtotal = new Span(eur.format(precio.multiply(BigDecimal.valueOf(it.getCantidad()))));
             subtotal.getStyle().set("font-weight", "800");
 
-            Button remove = new Button(new Icon(VaadinIcon.TRASH));
             remove.addThemeVariants(ButtonVariant.LUMO_ERROR);
 
             minus.addClickListener(e -> {
