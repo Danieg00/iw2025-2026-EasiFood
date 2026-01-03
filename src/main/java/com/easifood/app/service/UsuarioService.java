@@ -8,6 +8,9 @@ import com.easifood.app.repository.ClienteRepository;
 import com.easifood.app.repository.UsuarioRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import com.vaadin.flow.component.UI;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 @Service
 public class UsuarioService {
@@ -111,5 +114,20 @@ public class UsuarioService {
         );
 
         usuarioRepository.save(gerente);
+    }
+
+    public Usuario obtenerUsuarioActual() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getName())) {
+            return null;
+        }
+        String correo = auth.getName();
+        return usuarioRepository.findByCorreo(correo).orElse(null);
+    }
+
+    public void logout() {
+        UI.getCurrent().getSession().close();
+        SecurityContextHolder.clearContext();
+        UI.getCurrent().getPage().setLocation("/login");
     }
 }

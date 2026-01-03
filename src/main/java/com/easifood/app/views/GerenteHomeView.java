@@ -1,5 +1,10 @@
 package com.easifood.app.views;
 
+import com.easifood.app.service.UsuarioService;
+import com.vaadin.flow.component.avatar.Avatar;
+import com.vaadin.flow.component.contextmenu.ContextMenu;
+import com.vaadin.flow.component.html.H2;
+import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.easifood.app.model.Producto;
 import com.vaadin.flow.component.html.Image;
 import com.vaadin.flow.component.html.Paragraph;
@@ -56,21 +61,26 @@ public class GerenteHomeView extends VerticalLayout {
     private final RestauranteRepository restauranteRepository;
     private final ProductoService productoService;
     private final FileStorageService fileStorageService;
+    private final UsuarioService usuarioService;
 
     private FlexLayout cardsContainer;
     private Restaurante restauranteActual;
+    private Gerente gerenteActual;
 
     private Tabs tabs;
     private Tab tabEmpleados;
     private Tab tabProductos;
     private Button btnNuevo;
 
-    public GerenteHomeView(EmpleadoRepository empleadoRepository, UsuarioRepository usuarioRepository, RestauranteRepository restauranteRepository, ProductoService productoService, FileStorageService fileStorageService) {
+    public GerenteHomeView(EmpleadoRepository empleadoRepository, UsuarioRepository usuarioRepository,
+                           RestauranteRepository restauranteRepository, ProductoService productoService,
+                           FileStorageService fileStorageService, UsuarioService usuarioService) {
         this.empleadoRepository = empleadoRepository;
         this.usuarioRepository = usuarioRepository;
         this.restauranteRepository = restauranteRepository;
         this.productoService = productoService;
         this.fileStorageService = fileStorageService;
+        this.usuarioService = usuarioService;
 
         setSizeFull();
         setPadding(true);
@@ -83,8 +93,61 @@ public class GerenteHomeView extends VerticalLayout {
 
         cargarDatosDelGerente();
 
-        H1 titulo = new H1((restauranteActual != null ? restauranteActual.getNombre() : "Mi Restaurante"));
-        titulo.getStyle().set("color", "white").set("text-shadow", "0 2px 4px rgba(0,0,0,0.5)").set("margin-bottom", "0");
+        if (restauranteActual == null) {
+            Notification.show("No se ha encontrado información del restaurante.");
+        }
+
+        VerticalLayout headerContainer = new VerticalLayout();
+        headerContainer.setPadding(false);
+        headerContainer.setSpacing(false);
+        headerContainer.setWidthFull();
+
+        HorizontalLayout topRow = new HorizontalLayout();
+        topRow.setWidthFull();
+        topRow.setJustifyContentMode(JustifyContentMode.BETWEEN);
+        topRow.setAlignItems(Alignment.CENTER);
+
+        H1 logoApp = new H1("EasiFood");
+        logoApp.getStyle().set("color", "white");
+        logoApp.getStyle().set("margin", "0");
+
+        HorizontalLayout perfilGerente = new HorizontalLayout();
+        perfilGerente.setAlignItems(Alignment.CENTER);
+
+        String nombreMostrar = (gerenteActual != null) ? gerenteActual.getNombre() : "Gerente";
+        Span nombreSpan = new Span(nombreMostrar);
+        nombreSpan.getStyle().set("color", "white").set("font-weight", "bold");
+
+        Avatar avatar = new Avatar(nombreMostrar);
+        if (gerenteActual != null && gerenteActual.getImagen() != null) {
+            avatar.setImage(gerenteActual.getImagen());
+        }
+        avatar.getStyle().set("cursor", "pointer");
+
+        ContextMenu menu = new ContextMenu(avatar);
+        menu.setOpenOnClick(true);
+        menu.addItem("Cerrar Sesión", e -> usuarioService.logout());
+
+        perfilGerente.add(nombreSpan, avatar);
+        topRow.add(logoApp, perfilGerente);
+
+        Div bottomRow = new Div();
+        bottomRow.setWidthFull();
+        bottomRow.getStyle().set("text-align", "left"); // Alineación a la derecha
+        bottomRow.getStyle().set("margin-top", "-10px");
+
+        String nombreRest = (restauranteActual != null) ? restauranteActual.getNombre() : "Sin Restaurante";
+        H2 nombreRestaurante = new H2(nombreRest);
+        nombreRestaurante.getStyle().set("margin", "0");
+        nombreRestaurante.getStyle().set("color", "#e0e0e0"); // Gris muy claro
+        nombreRestaurante.getStyle().set("font-size", "1.8rem");
+        nombreRestaurante.getStyle().set("text-shadow", "0 2px 4px rgba(0,0,0,0.5)");
+
+        bottomRow.add(nombreRestaurante);
+        headerContainer.add(topRow, bottomRow);
+
+        //H1 titulo = new H1((restauranteActual != null ? restauranteActual.getNombre() : "Mi Restaurante"));
+        //titulo.getStyle().set("color", "white").set("text-shadow", "0 2px 4px rgba(0,0,0,0.5)").set("margin-bottom", "0");
 
         tabEmpleados = new Tab("Empleados");
         tabProductos = new Tab("Productos / Carta");
@@ -119,7 +182,7 @@ public class GerenteHomeView extends VerticalLayout {
 
         refrescarContenido();
 
-        add(titulo, navigationBar, btnNuevo, cardsContainer);
+        add(headerContainer, navigationBar, btnNuevo, cardsContainer);
     }
     private void actualizarBotonNuevo() {
         if (tabs.getSelectedTab().equals(tabEmpleados)) {
