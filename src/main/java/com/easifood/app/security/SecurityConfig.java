@@ -5,6 +5,7 @@ import com.easifood.app.views.LoginView;
 import com.vaadin.flow.spring.security.VaadinSecurityConfigurer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.core.userdetails.User;
@@ -18,17 +19,32 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableWebSecurity
 public class SecurityConfig {
 
+    /**
+     * ✅ 1) Cadena SOLO para recursos públicos.
+     * Importante: debe ir ANTES que la de Vaadin.
+     */
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    @Order(0)
+    SecurityFilterChain publicResourcesFilterChain(HttpSecurity http) throws Exception {
+        return http
+                // Solo se aplica a estas rutas:
+                .securityMatcher("/images/**", "/uploads/**", "/imagenes/**")
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+                // Para recursos estáticos no necesitamos CSRF
+                .csrf(csrf -> csrf.disable())
+                .build();
+    }
 
-        http.authorizeHttpRequests(auth -> auth
-                .requestMatchers("/images/**", "/uploads/**").permitAll()
-        );
+    /**
+     * ✅ 2) Cadena principal de Vaadin (views + login).
+     */
+    @Bean
+    @Order(1)
+    SecurityFilterChain vaadinFilterChain(HttpSecurity http) throws Exception {
 
         http.with(VaadinSecurityConfigurer.vaadin(), vaadin -> {
             vaadin.loginView(LoginView.class, "/login");
         });
-
 
         return http.build();
     }

@@ -14,17 +14,26 @@ import com.vaadin.flow.component.login.LoginI18n;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.orderedlayout.FlexComponent.Alignment;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
+import com.vaadin.flow.component.textfield.Autocapitalize;
+import com.vaadin.flow.component.textfield.EmailField;
+import com.vaadin.flow.component.textfield.IntegerField;
 import com.vaadin.flow.component.textfield.PasswordField;
 import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.component.upload.Upload;
-import com.vaadin.flow.server.streams.UploadHandler;
+import com.vaadin.flow.data.binder.Binder;
+import com.vaadin.flow.data.binder.ValidationException;
+import com.vaadin.flow.data.validator.EmailValidator;
+import com.vaadin.flow.data.value.ValueChangeMode;
 import com.vaadin.flow.router.BeforeEnterEvent;
 import com.vaadin.flow.router.BeforeEnterObserver;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.auth.AnonymousAllowed;
+import com.vaadin.flow.server.streams.UploadHandler;
 
 import java.io.ByteArrayInputStream;
+import java.util.Locale;
+import java.util.regex.Pattern;
 
 @PageTitle("Login | EasiFood")
 @Route("login")
@@ -32,6 +41,10 @@ import java.io.ByteArrayInputStream;
 public class LoginView extends VerticalLayout implements BeforeEnterObserver {
 
     private final LoginForm loginForm;
+
+    // Regex simples
+    private static final Pattern PHONE = Pattern.compile("^[0-9]{9,15}$");
+    private static final Pattern PASS = Pattern.compile("^(?=.*[A-Za-z])(?=.*\\d).{6,}$");
 
     public LoginView(UsuarioService usuarioService, FileStorageService fileStorageService) {
 
@@ -87,11 +100,13 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
                 "Registrarse como Cliente",
                 e -> openRegisterClienteDialog(usuarioService, fileStorageService)
         );
+        registerClienteBtn.getStyle().set("cursor", "pointer");
 
         Button registerGerenteBtn = new Button(
                 "Registrarse como Gerente",
                 e -> openRegisterGerenteDialog(usuarioService, fileStorageService)
         );
+        registerGerenteBtn.getStyle().set("cursor", "pointer");
 
         VerticalLayout btnLayout = new VerticalLayout(registerClienteBtn, registerGerenteBtn);
         btnLayout.setPadding(false);
@@ -161,7 +176,20 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
     }
 
     // ============================================================
-    // REGISTRO DE CLIENTE
+    // DTOs para Binder (solo para validar UI)
+    // ============================================================
+    private static class ClienteReg {
+        String nombre, apellidos, correo, contra, direccion1, direccion2;
+    }
+
+    private static class GerenteReg {
+        String nombre, apellidos, correo, contra;
+        String nombreRest, direccion, telefono, horario;
+        Integer aforo;
+    }
+
+    // ============================================================
+    // REGISTRO DE CLIENTE (VALIDADO)
     // ============================================================
     private void openRegisterClienteDialog(UsuarioService usuarioService,
                                            FileStorageService fileStorageService) {
@@ -174,7 +202,7 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
 
         TextField nombre = new TextField("Nombre");
         TextField apellidos = new TextField("Apellidos");
-        TextField correo = new TextField("Correo");
+        EmailField correo = new EmailField("Correo");
         PasswordField contra = new PasswordField("Contraseña");
         TextField direccion1 = new TextField("Dirección 1");
         TextField direccion2 = new TextField("Dirección 2");
@@ -186,101 +214,195 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
         direccion1.setWidthFull();
         direccion2.setWidthFull();
 
-        // ✅ Foto de perfil (opcional) - UploadHandler API (Vaadin 24.8+)
+        nombre.setAutocapitalize(Autocapitalize.WORDS);
+        apellidos.setAutocapitalize(Autocapitalize.WORDS);
+
+        correo.setClearButtonVisible(true);
+        correo.setValueChangeMode(ValueChangeMode.EAGER);
+
+        // Foto de perfil (opcional)
         Image preview = new Image();
         preview.setVisible(false);
         preview.setWidth("110px");
         preview.setHeight("110px");
         preview.getStyle().set("border-radius", "50%").set("object-fit", "cover");
+        preview.getStyle().set("display", "block");
 
         final String[] imagenUrl = { null };
-        UI ui = UI.getCurrent();
 
         Upload upload = new Upload(
                 UploadHandler.inMemory((metadata, bytes) -> {
-                    // Validación simple extra (por si acaso)
                     if (bytes == null || bytes.length == 0) return;
 
-                    String fileName = metadata.fileName();
                     String savedUrl = fileStorageService.saveUserImage(
                             new ByteArrayInputStream(bytes),
-                            fileName
+                            metadata.fileName()
                     );
 
                     imagenUrl[0] = savedUrl;
 
-                    // actualizar UI con seguridad
-                    if (ui != null) {
-                        ui.access(() -> {
-                            preview.setSrc(savedUrl);
-                            preview.setVisible(true);
-                        });
-                    }
+                    preview.setSrc(savedUrl);
+                    preview.setVisible(true);
+                    preview.getElement().callJsFunction("requestContentUpdate");
                 })
         );
 
         upload.setAcceptedFileTypes("image/jpeg", "image/png", "image/webp");
         upload.setMaxFiles(1);
-        upload.setMaxFileSize(3 * 1024 * 1024); // 3MB
+        upload.setMaxFileSize(3 * 1024 * 1024);
         upload.setDropLabel(new Span("Arrastra tu foto aquí o pulsa para seleccionar"));
+        upload.getStyle().set("cursor", "pointer");
 
+        // Binder + validaciones
+        ClienteReg bean = new ClienteReg();
+        Binder<ClienteReg> binder = new Binder<>(ClienteReg.class);
+
+        binder.forField(nombre)
+                .asRequired("El nombre es obligatorio")
+                .withValidator(v -> v != null && v.trim().length() >= 2, "Mínimo 2 caracteres")
+                .bind(b -> b.nombre, (b, v) -> b.nombre = v);
+
+        binder.forField(apellidos)
+                .asRequired("Los apellidos son obligatorios")
+                .withValidator(v -> v != null && v.trim().length() >= 2, "Mínimo 2 caracteres")
+                .bind(b -> b.apellidos, (b, v) -> b.apellidos = v);
+
+        binder.forField(correo)
+                .asRequired("El correo es obligatorio")
+                .withValidator(new EmailValidator("Correo inválido"))
+                .bind(b -> b.correo, (b, v) -> b.correo = v);
+
+        // ✅ hace que el mensaje “Correo inválido” salga al escribir
+        correo.addValueChangeListener(e -> binder.validate());
+
+        binder.forField(contra)
+                .asRequired("La contraseña es obligatoria")
+                .withValidator(v -> v != null && PASS.matcher(v).matches(),
+                        "Mín. 6 caracteres y debe incluir letras y números")
+                .bind(b -> b.contra, (b, v) -> b.contra = v);
+
+        binder.forField(direccion1)
+                .asRequired("La dirección 1 es obligatoria")
+                .withValidator(v -> v != null && v.trim().length() >= 5, "Mínimo 5 caracteres")
+                .bind(b -> b.direccion1, (b, v) -> b.direccion1 = v);
+
+        binder.forField(direccion2)
+                .bind(b -> b.direccion2, (b, v) -> b.direccion2 = v);
+
+        Span requiredNote = new Span("Los campos marcados como obligatorios deben rellenarse");
+        requiredNote.getStyle().set("font-size", "0.85rem");
+        requiredNote.getStyle().set("color", "var(--lumo-secondary-text-color)");
+
+        // Layout
         VerticalLayout layout = new VerticalLayout(
                 nombre, apellidos, correo, contra, direccion1, direccion2,
+                requiredNote,
                 new Span("Foto de perfil (opcional)"),
                 upload,
                 preview
         );
-
         layout.setSpacing(false);
         layout.setPadding(true);
         layout.getStyle().set("row-gap", "0.4rem");
         layout.setWidthFull();
 
-        Button registrar = new Button("Registrar", event -> {
-            try {
-                usuarioService.registrarCliente(
-                        nombre.getValue(),
-                        apellidos.getValue(),
-                        correo.getValue(),
-                        contra.getValue(),
-                        direccion1.getValue(),
-                        direccion2.getValue(),
-                        imagenUrl[0] // ✅ NUEVO
-                );
-                dialog.close();
-            } catch (Exception ex) {
-                correo.setInvalid(true);
-                correo.setErrorMessage("El correo ya está registrado.");
-            }
-        });
+        Button registrar = new Button("Registrar");
+        registrar.getStyle().set("cursor", "pointer");
+        registrar.setEnabled(false);
 
         Button cancelar = new Button("Cancelar", e -> dialog.close());
+        cancelar.getStyle().set("cursor", "pointer");
+
+        // Estado del upload (lo llevamos nosotros) - sin deprecated listeners
+        final boolean[] uploading = { false };
+
+        Runnable refresh = () -> registrar.setEnabled(binder.isValid() && !uploading[0]);
+
+        binder.addStatusChangeListener(e -> refresh.run());
+
+        upload.getElement().addEventListener("upload-start", e -> {
+            uploading[0] = true;
+            refresh.run();
+        });
+        upload.getElement().addEventListener("upload-success", e -> {
+            uploading[0] = false;
+            refresh.run();
+        });
+        upload.getElement().addEventListener("upload-error", e -> {
+            uploading[0] = false;
+            refresh.run();
+        });
+        upload.getElement().addEventListener("upload-abort", e -> {
+            uploading[0] = false;
+            refresh.run();
+        });
+        upload.getElement().addEventListener("file-remove", e -> {
+            uploading[0] = false;
+            refresh.run();
+            preview.setVisible(false);
+            imagenUrl[0] = null;
+        });
+
+        refresh.run();
+
+        registrar.addClickListener(e -> {
+            try {
+                binder.writeBean(bean);
+
+                usuarioService.registrarCliente(
+                        bean.nombre.trim(),
+                        bean.apellidos.trim(),
+                        bean.correo.trim().toLowerCase(Locale.ROOT),
+                        bean.contra,
+                        bean.direccion1.trim(),
+                        (bean.direccion2 == null ? "" : bean.direccion2.trim()),
+                        imagenUrl[0]
+                );
+
+                Notification.show("Registrado correctamente. Ya puedes iniciar sesión.",
+                        2200, Notification.Position.TOP_CENTER);
+
+                dialog.close();
+
+            } catch (ValidationException vex) {
+                Notification.show("Revisa los campos", 2000, Notification.Position.TOP_CENTER);
+            } catch (IllegalArgumentException iae) {
+                correo.setInvalid(true);
+                correo.setErrorMessage(iae.getMessage());
+            } catch (Exception ex) {
+                Notification.show("Error al registrar", 2500, Notification.Position.TOP_CENTER);
+            }
+        });
 
         dialog.getFooter().add(cancelar, registrar);
         dialog.add(layout);
         dialog.open();
+
+        binder.readBean(bean);
+        binder.validate();
+        refresh.run();
     }
 
     // ============================================================
-    // REGISTRO DE GERENTE
+    // REGISTRO DE GERENTE (VALIDADO)
     // ============================================================
     private void openRegisterGerenteDialog(UsuarioService usuarioService,
                                            FileStorageService fileStorageService) {
 
         Dialog dialog = new Dialog();
         dialog.setHeaderTitle("Registro de Gerente y Restaurante");
-        dialog.setWidth("520px");
+        dialog.setWidth("560px");
         dialog.setHeight("auto");
         dialog.getElement().getStyle().set("overflow", "visible");
 
         TextField nombre = new TextField("Nombre");
         TextField apellidos = new TextField("Apellidos");
-        TextField correo = new TextField("Correo");
+        EmailField correo = new EmailField("Correo");
         PasswordField contra = new PasswordField("Contraseña");
 
         TextField nombreRest = new TextField("Nombre del Restaurante");
         TextField direccion = new TextField("Dirección");
-        TextField aforo = new TextField("Aforo (número)");
+        IntegerField aforo = new IntegerField("Aforo");
         TextField telefono = new TextField("Teléfono");
         TextField horario = new TextField("Horario");
 
@@ -288,52 +410,116 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
         apellidos.setWidthFull();
         correo.setWidthFull();
         contra.setWidthFull();
-
         nombreRest.setWidthFull();
         direccion.setWidthFull();
         aforo.setWidthFull();
         telefono.setWidthFull();
         horario.setWidthFull();
 
-        // ✅ Foto de perfil (opcional) - UploadHandler API
+        nombre.setAutocapitalize(Autocapitalize.WORDS);
+        apellidos.setAutocapitalize(Autocapitalize.WORDS);
+
+        correo.setClearButtonVisible(true);
+        correo.setValueChangeMode(ValueChangeMode.EAGER);
+
+        aforo.setMin(1);
+        aforo.setStepButtonsVisible(true);
+        aforo.setHelperText("Número positivo");
+
+        // Foto de perfil (opcional)
         Image preview = new Image();
         preview.setVisible(false);
         preview.setWidth("110px");
         preview.setHeight("110px");
         preview.getStyle().set("border-radius", "50%").set("object-fit", "cover");
+        preview.getStyle().set("display", "block");
 
         final String[] imagenUrl = { null };
-        UI ui = UI.getCurrent();
 
         Upload upload = new Upload(
                 UploadHandler.inMemory((metadata, bytes) -> {
                     if (bytes == null || bytes.length == 0) return;
 
-                    String fileName = metadata.fileName();
                     String savedUrl = fileStorageService.saveUserImage(
                             new ByteArrayInputStream(bytes),
-                            fileName
+                            metadata.fileName()
                     );
 
                     imagenUrl[0] = savedUrl;
 
-                    if (ui != null) {
-                        ui.access(() -> {
-                            preview.setSrc(savedUrl);
-                            preview.setVisible(true);
-                        });
-                    }
+                    preview.setSrc(savedUrl);
+                    preview.setVisible(true);
+                    preview.getElement().callJsFunction("requestContentUpdate");
                 })
         );
 
         upload.setAcceptedFileTypes("image/jpeg", "image/png", "image/webp");
         upload.setMaxFiles(1);
-        upload.setMaxFileSize(3 * 1024 * 1024); // 3MB
+        upload.setMaxFileSize(3 * 1024 * 1024);
         upload.setDropLabel(new Span("Arrastra tu foto aquí o pulsa para seleccionar"));
+        upload.getStyle().set("cursor", "pointer");
+
+        // Binder + validaciones
+        GerenteReg bean = new GerenteReg();
+        Binder<GerenteReg> binder = new Binder<>(GerenteReg.class);
+
+        binder.forField(nombre)
+                .asRequired("El nombre es obligatorio")
+                .withValidator(v -> v != null && v.trim().length() >= 2, "Mínimo 2 caracteres")
+                .bind(b -> b.nombre, (b, v) -> b.nombre = v);
+
+        binder.forField(apellidos)
+                .asRequired("Los apellidos son obligatorios")
+                .withValidator(v -> v != null && v.trim().length() >= 2, "Mínimo 2 caracteres")
+                .bind(b -> b.apellidos, (b, v) -> b.apellidos = v);
+
+        binder.forField(correo)
+                .asRequired("El correo es obligatorio")
+                .withValidator(new EmailValidator("Correo inválido"))
+                .bind(b -> b.correo, (b, v) -> b.correo = v);
+
+        // ✅ hace que el mensaje “Correo inválido” salga al escribir
+        correo.addValueChangeListener(e -> binder.validate());
+
+        binder.forField(contra)
+                .asRequired("La contraseña es obligatoria")
+                .withValidator(v -> v != null && PASS.matcher(v).matches(),
+                        "Mín. 6 caracteres y debe incluir letras y números")
+                .bind(b -> b.contra, (b, v) -> b.contra = v);
+
+        binder.forField(nombreRest)
+                .asRequired("El nombre del restaurante es obligatorio")
+                .withValidator(v -> v != null && v.trim().length() >= 2, "Mínimo 2 caracteres")
+                .bind(b -> b.nombreRest, (b, v) -> b.nombreRest = v);
+
+        binder.forField(direccion)
+                .asRequired("La dirección es obligatoria")
+                .withValidator(v -> v != null && v.trim().length() >= 5, "Mínimo 5 caracteres")
+                .bind(b -> b.direccion, (b, v) -> b.direccion = v);
+
+        binder.forField(aforo)
+                .asRequired("El aforo es obligatorio")
+                .withValidator(v -> v != null && v >= 1, "Debe ser un número positivo")
+                .bind(b -> b.aforo, (b, v) -> b.aforo = v);
+
+        binder.forField(telefono)
+                .asRequired("El teléfono es obligatorio")
+                .withValidator(v -> v != null && PHONE.matcher(v.trim()).matches(), "Solo números (9-15 dígitos)")
+                .bind(b -> b.telefono, (b, v) -> b.telefono = v);
+
+        binder.forField(horario)
+                .asRequired("El horario es obligatorio")
+                .withValidator(v -> v != null && v.trim().length() >= 4, "Escribe un horario válido")
+                .bind(b -> b.horario, (b, v) -> b.horario = v);
+
+        Span requiredNote = new Span("Los campos marcados como obligatorios deben rellenarse");
+        requiredNote.getStyle().set("font-size", "0.85rem");
+        requiredNote.getStyle().set("color", "var(--lumo-secondary-text-color)");
 
         VerticalLayout layout = new VerticalLayout(
                 nombre, apellidos, correo, contra,
                 nombreRest, direccion, aforo, telefono, horario,
+                requiredNote,
                 new Span("Foto de perfil (opcional)"),
                 upload,
                 preview
@@ -344,44 +530,83 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
         layout.getStyle().set("row-gap", "0.4rem");
         layout.setWidthFull();
 
-        Button registrar = new Button("Registrar", event -> {
+        Button registrar = new Button("Registrar");
+        registrar.getStyle().set("cursor", "pointer");
+        registrar.setEnabled(false);
+
+        Button cancelar = new Button("Cancelar", e -> dialog.close());
+        cancelar.getStyle().set("cursor", "pointer");
+
+        // Estado del upload (lo llevamos nosotros) - sin deprecated listeners
+        final boolean[] uploading = { false };
+
+        Runnable refresh = () -> registrar.setEnabled(binder.isValid() && !uploading[0]);
+
+        binder.addStatusChangeListener(e -> refresh.run());
+
+        upload.getElement().addEventListener("upload-start", e -> {
+            uploading[0] = true;
+            refresh.run();
+        });
+        upload.getElement().addEventListener("upload-success", e -> {
+            uploading[0] = false;
+            refresh.run();
+        });
+        upload.getElement().addEventListener("upload-error", e -> {
+            uploading[0] = false;
+            refresh.run();
+        });
+        upload.getElement().addEventListener("upload-abort", e -> {
+            uploading[0] = false;
+            refresh.run();
+        });
+        upload.getElement().addEventListener("file-remove", e -> {
+            uploading[0] = false;
+            refresh.run();
+            preview.setVisible(false);
+            imagenUrl[0] = null;
+        });
+
+        refresh.run();
+
+        registrar.addClickListener(e -> {
             try {
-                Integer aforoInt = null;
-                if (!aforo.isEmpty()) {
-                    aforoInt = Integer.valueOf(aforo.getValue());
-                }
+                binder.writeBean(bean);
 
                 usuarioService.registrarGerente(
-                        nombre.getValue(),
-                        apellidos.getValue(),
-                        correo.getValue(),
-                        contra.getValue(),
-                        nombreRest.getValue(),
-                        direccion.getValue(),
-                        aforoInt,
-                        telefono.getValue(),
-                        horario.getValue(),
-                        imagenUrl[0] // ✅ NUEVO
+                        bean.nombre.trim(),
+                        bean.apellidos.trim(),
+                        bean.correo.trim().toLowerCase(Locale.ROOT),
+                        bean.contra,
+                        bean.nombreRest.trim(),
+                        bean.direccion.trim(),
+                        bean.aforo,
+                        bean.telefono.trim(),
+                        bean.horario.trim(),
+                        imagenUrl[0]
                 );
+
+                Notification.show("Registrado correctamente. Ya puedes iniciar sesión.",
+                        2200, Notification.Position.TOP_CENTER);
 
                 dialog.close();
 
-            } catch (NumberFormatException nfe) {
-                aforo.setInvalid(true);
-                aforo.setErrorMessage("Debe ser un número.");
+            } catch (ValidationException vex) {
+                Notification.show("Revisa los campos", 2000, Notification.Position.TOP_CENTER);
             } catch (IllegalArgumentException iae) {
                 correo.setInvalid(true);
                 correo.setErrorMessage(iae.getMessage());
             } catch (Exception ex) {
-                ex.printStackTrace();
-                Notification.show("Error al registrar");
+                Notification.show("Error al registrar", 2500, Notification.Position.TOP_CENTER);
             }
         });
-
-        Button cancelar = new Button("Cancelar", e -> dialog.close());
 
         dialog.getFooter().add(cancelar, registrar);
         dialog.add(layout);
         dialog.open();
+
+        binder.readBean(bean);
+        binder.validate();
+        refresh.run();
     }
 }
