@@ -2,6 +2,7 @@ node_modules/
 frontend/generated/
 vite.config.ts
 package-lock.json
+src/main/frontend/generated/
 
 HELP.md
 target/
