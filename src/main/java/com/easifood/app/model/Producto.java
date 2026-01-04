@@ -2,6 +2,8 @@ package com.easifood.app.model;
 
 import jakarta.persistence.*;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "productos")
@@ -25,9 +27,19 @@ public class Producto {
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal precio;
 
+    private boolean esMenu = false;
+
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
     @JoinColumn(name = "restaurante_id", nullable = false)
     private Restaurante restaurante;
+
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(
+            name = "producto_items", // Tabla intermedia que crea Hibernate automáticamente
+            joinColumns = @JoinColumn(name = "menu_id"),
+            inverseJoinColumns = @JoinColumn(name = "item_id")
+    )
+    private List<Producto> itemsMenu = new ArrayList<>();
 
     public Producto() {}
 
@@ -58,4 +70,10 @@ public class Producto {
 
     public Restaurante getRestaurante() { return restaurante; }
     public void setRestaurante(Restaurante restaurante) { this.restaurante = restaurante; }
+
+    public boolean isEsMenu() { return esMenu; }
+    public void setEsMenu(boolean esMenu) { this.esMenu = esMenu; }
+
+    public List<Producto> getItemsMenu() { return itemsMenu; }
+    public void setItemsMenu(List<Producto> itemsMenu) { this.itemsMenu = itemsMenu; }
 }
