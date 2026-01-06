@@ -4,49 +4,45 @@ import com.easifood.app.model.Empleado;
 import com.easifood.app.model.Pedido;
 import com.easifood.app.service.EmpleadoService;
 import com.easifood.app.service.PedidoService;
-
+import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.TextField;
-import com.vaadin.flow.router.PageTitle;
-import com.vaadin.flow.router.Route;
-
+import com.vaadin.flow.router.*;
 import jakarta.annotation.security.PermitAll;
+
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Route("pedido")
-@PageTitle("Crear Pedido")
 @PermitAll
-public class PedidoView extends VerticalLayout {
+public class PedidoView extends VerticalLayout implements AfterNavigationObserver {
 
-    public PedidoView(
-            PedidoService pedidoService,
-            EmpleadoService empleadoService
-    ) {
+    public PedidoView(PedidoService pedidoService, EmpleadoService empleadoService) {
 
         setWidth("400px");
         setPadding(true);
         setSpacing(true);
 
-        add(new H1("Crear pedido"));
+        H1 title = new H1(getTranslation("order.create.title"));
+        add(title);
 
         // Empleado
-        ComboBox<Empleado> empleadoCombo = new ComboBox<>("Empleado");
+        ComboBox<Empleado> empleadoCombo = new ComboBox<>(getTranslation("order.create.employee"));
         List<Empleado> empleados = empleadoService.findAll();
         empleadoCombo.setItems(empleados);
         empleadoCombo.setItemLabelGenerator(Empleado::getNombre);
         empleadoCombo.setRequired(true);
 
         // Dirección
-        TextField direccion = new TextField("Dirección de entrega");
+        TextField direccion = new TextField(getTranslation("order.create.deliveryAddress"));
         direccion.setRequired(true);
 
         // Estado
-        ComboBox<String> estadoCombo = new ComboBox<>("Estado");
+        ComboBox<String> estadoCombo = new ComboBox<>(getTranslation("order.create.status"));
         estadoCombo.setItems(
                 "PENDIENTE",
                 "EN_PREPARACION",
@@ -56,12 +52,13 @@ public class PedidoView extends VerticalLayout {
         estadoCombo.setValue("PENDIENTE");
 
         // Botón
-        Button crear = new Button("Crear pedido");
+        Button crear = new Button(getTranslation("order.create.button"));
+        crear.getStyle().set("cursor", "pointer");
 
         crear.addClickListener(e -> {
 
             if (empleadoCombo.isEmpty() || direccion.isEmpty()) {
-                Notification.show("Completa todos los campos");
+                Notification.show(getTranslation("order.create.validation.fillAll"));
                 return;
             }
 
@@ -72,15 +69,9 @@ public class PedidoView extends VerticalLayout {
                     LocalDateTime.now()
             );
 
-            /*Pedido pedido = new Pedido();
-            pedido.setEmpleado(empleadoCombo.getValue());
-            pedido.setDireccionEntrega(direccion.getValue());
-            pedido.setEstado(estadoCombo.getValue());
-            pedido.setFechaCreacion(LocalDateTime.now());*/
-
             pedidoService.guardar(pedido);
 
-            Notification.show("Pedido creado correctamente");
+            Notification.show(getTranslation("order.create.success"));
 
             direccion.clear();
             estadoCombo.setValue("PENDIENTE");
@@ -92,5 +83,10 @@ public class PedidoView extends VerticalLayout {
                 estadoCombo,
                 crear
         );
+    }
+
+    @Override
+    public void afterNavigation(AfterNavigationEvent event) {
+        UI.getCurrent().getPage().setTitle(getTranslation("order.create.pageTitle"));
     }
 }

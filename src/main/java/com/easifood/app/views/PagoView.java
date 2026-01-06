@@ -27,10 +27,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.YearMonth;
 
-@PageTitle("Pago")
 @Route("pago/:restauranteId")
 @RolesAllowed("ROLE_CLIENTE")
-public class PagoView extends VerticalLayout implements BeforeEnterObserver {
+public class PagoView extends VerticalLayout implements BeforeEnterObserver, AfterNavigationObserver {
 
     private final PedidoService pedidoService;
     private final CarritoService carritoService;
@@ -59,6 +58,12 @@ public class PagoView extends VerticalLayout implements BeforeEnterObserver {
         add(buildForm());
     }
 
+    // Título dinámico (i18n)
+    @Override
+    public void afterNavigation(AfterNavigationEvent event) {
+        UI.getCurrent().getPage().setTitle(getTranslation("pago.pageTitle"));
+    }
+
     // ==========================
     // HEADER (mismo estilo que Perfil / Checkout)
     // ==========================
@@ -77,7 +82,7 @@ public class PagoView extends VerticalLayout implements BeforeEnterObserver {
         center.setAlignItems(FlexComponent.Alignment.CENTER);
         center.setWidthFull();
 
-        H1 title = new H1("EasiFood");
+        H1 title = new H1(getTranslation("app.title"));
         title.getStyle()
                 .set("margin", "0.5rem 0 0.25rem 0")
                 .set("font-weight", "800")
@@ -85,11 +90,9 @@ public class PagoView extends VerticalLayout implements BeforeEnterObserver {
                 .set("letter-spacing", "0.5px")
                 .set("cursor", "pointer");
 
-        title.addClickListener(e ->
-                UI.getCurrent().navigate("home-cliente")
-        );
+        title.addClickListener(e -> UI.getCurrent().navigate("home-cliente"));
 
-        Span subtitle = new Span("Pago");
+        Span subtitle = new Span(getTranslation("pago.subtitle"));
         subtitle.getStyle().set("opacity", "0.7");
 
         center.add(title, subtitle);
@@ -114,8 +117,8 @@ public class PagoView extends VerticalLayout implements BeforeEnterObserver {
                 .set("cursor", "pointer")
                 .set("transition", "background-color 160ms ease, box-shadow 160ms ease");
 
-        back.getElement().setProperty("title", "Volver");
-        back.getElement().setAttribute("aria-label", "Volver");
+        back.getElement().setProperty("title", getTranslation("common.back"));
+        back.getElement().setAttribute("aria-label", getTranslation("common.back"));
 
         back.getElement().addEventListener("mouseenter", e ->
                 back.getStyle()
@@ -144,7 +147,7 @@ public class PagoView extends VerticalLayout implements BeforeEnterObserver {
 
         String nombre = (u != null && u.getNombre() != null && !u.getNombre().isBlank())
                 ? u.getNombre()
-                : "Usuario";
+                : getTranslation("user.defaultName");
 
         Avatar avatar = new Avatar(nombre);
         avatar.setWidth("44px");
@@ -157,10 +160,15 @@ public class PagoView extends VerticalLayout implements BeforeEnterObserver {
 
         ContextMenu menu = new ContextMenu(avatar);
         menu.setOpenOnClick(true);
-        menu.addItem("Mi perfil", e -> UI.getCurrent().navigate("perfil"));
-        menu.addItem("Cerrar sesión", e -> authenticationContext.logout());
+        menu.addItem(getTranslation("user.menu.profile"), e -> UI.getCurrent().navigate("perfil"));
+        menu.addItem(getTranslation("user.menu.logout"), e -> authenticationContext.logout());
 
-        return new HorizontalLayout(avatar);
+        HorizontalLayout wrap = new HorizontalLayout(avatar);
+        wrap.setPadding(false);
+        wrap.setSpacing(false);
+        wrap.setAlignItems(FlexComponent.Alignment.CENTER);
+
+        return wrap;
     }
 
     private Usuario getUsuarioActual() {
@@ -178,8 +186,8 @@ public class PagoView extends VerticalLayout implements BeforeEnterObserver {
         wrap.setWidthFull();
         wrap.getStyle().set("margin", "0 auto");
 
-        H2 h = new H2("Datos de la tarjeta");
-        Paragraph p = new Paragraph("Introduce los datos para completar el pago.");
+        H2 h = new H2(getTranslation("pago.card.title"));
+        Paragraph p = new Paragraph(getTranslation("pago.card.subtitle"));
         p.getStyle().set("opacity", "0.8");
 
         FormLayout form = new FormLayout();
@@ -189,15 +197,15 @@ public class PagoView extends VerticalLayout implements BeforeEnterObserver {
                 new FormLayout.ResponsiveStep("520px", 2)
         );
 
-        TextField titular = new TextField("Titular");
-        TextField numero = new TextField("Número de tarjeta");
-        numero.setPlaceholder("XXXX XXXX XXXX XXXX");
+        TextField titular = new TextField(getTranslation("pago.field.holder"));
+        TextField numero = new TextField(getTranslation("pago.field.number"));
+        numero.setPlaceholder(getTranslation("pago.placeholder.number"));
 
-        TextField caducidad = new TextField("Caducidad (MM/YY)");
-        caducidad.setPlaceholder("MM/YY");
+        TextField caducidad = new TextField(getTranslation("pago.field.expiry"));
+        caducidad.setPlaceholder(getTranslation("pago.placeholder.expiry"));
 
-        TextField cvv = new TextField("CVV");
-        cvv.setPlaceholder("***");
+        TextField cvv = new TextField(getTranslation("pago.field.cvv"));
+        cvv.setPlaceholder(getTranslation("pago.placeholder.cvv"));
 
         form.add(titular, numero, caducidad, cvv);
 
@@ -205,37 +213,40 @@ public class PagoView extends VerticalLayout implements BeforeEnterObserver {
         binder.setBean(data);
 
         binder.forField(titular)
-                .asRequired("El titular es obligatorio")
-                .withValidator(s -> s != null && s.trim().length() >= 3, "Titular inválido")
+                .asRequired(getTranslation("pago.validation.holder.required"))
+                .withValidator(s -> s != null && s.trim().length() >= 3,
+                        getTranslation("pago.validation.holder.invalid"))
                 .bind(PagoData::getTitular, PagoData::setTitular);
 
         binder.forField(numero)
-                .asRequired("El número es obligatorio")
-                .withValidator(PagoView::validarNumeroTarjeta, "Número inválido")
+                .asRequired(getTranslation("pago.validation.number.required"))
+                .withValidator(PagoView::validarNumeroTarjeta,
+                        getTranslation("pago.validation.number.invalid"))
                 .bind(PagoData::getNumeroTarjeta, PagoData::setNumeroTarjeta);
 
         binder.forField(caducidad)
-                .asRequired("La caducidad es obligatoria")
-                .withValidator(PagoView::validarCaducidad, "Caducidad inválida")
+                .asRequired(getTranslation("pago.validation.expiry.required"))
+                .withValidator(PagoView::validarCaducidad,
+                        getTranslation("pago.validation.expiry.invalid"))
                 .bind(PagoData::getCaducidad, PagoData::setCaducidad);
 
         binder.forField(cvv)
-                .asRequired("El CVV es obligatorio")
-                .withValidator(PagoView::validarCvv, "CVV inválido")
+                .asRequired(getTranslation("pago.validation.cvv.required"))
+                .withValidator(PagoView::validarCvv,
+                        getTranslation("pago.validation.cvv.invalid"))
                 .bind(PagoData::getCvv, PagoData::setCvv);
 
         // ==========================
         // ACCIONES (Pagar arriba, Cancelar abajo, izquierda)
         // ==========================
-        Button pagar = new Button("Pagar", e -> pagar());
+        Button pagar = new Button(getTranslation("common.pay"), e -> pagar());
         pagar.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
         pagar.getStyle()
                 .set("font-weight", "700")
                 .set("cursor", "pointer")
                 .set("min-width", "160px");
 
-        Button cancelar = new Button("Cancelar", e -> cancelarPago());
-
+        Button cancelar = new Button(getTranslation("common.cancel"), e -> cancelarPago());
         cancelar.addThemeVariants(ButtonVariant.LUMO_TERTIARY);
         cancelar.getStyle()
                 .set("cursor", "pointer")
@@ -262,7 +273,7 @@ public class PagoView extends VerticalLayout implements BeforeEnterObserver {
 
         direccionEntrega = (String) VaadinSession.getCurrent().getAttribute("checkout_direccion");
         if (direccionEntrega == null || direccionEntrega.isBlank()) {
-            Notification.show("Faltan datos de entrega. Vuelve al checkout.");
+            Notification.show(getTranslation("pago.delivery.missing"));
             event.rerouteTo("checkout/" + restauranteId);
         }
     }
@@ -273,10 +284,10 @@ public class PagoView extends VerticalLayout implements BeforeEnterObserver {
         try {
             pedidoService.crearPedido(restauranteId, direccionEntrega);
             VaadinSession.getCurrent().setAttribute("checkout_direccion", null);
-            Notification.show("Pedido realizado", 2500, Notification.Position.BOTTOM_CENTER);
+            Notification.show(getTranslation("pago.success"), 2500, Notification.Position.BOTTOM_CENTER);
             UI.getCurrent().navigate("home-cliente?tab=pedidos");
         } catch (Exception ex) {
-            Notification.show("No se pudo completar el pago");
+            Notification.show(getTranslation("pago.error"));
         }
     }
 
@@ -341,14 +352,8 @@ public class PagoView extends VerticalLayout implements BeforeEnterObserver {
             return;
         }
 
-        // Vaciar carrito del restaurante actual
         carritoService.clear(restauranteId);
-
-        // Limpiar dirección de checkout
         VaadinSession.getCurrent().setAttribute("checkout_direccion", null);
-
-        // Volver al restaurante
         UI.getCurrent().navigate("cliente-restaurante/" + restauranteId);
     }
-
 }

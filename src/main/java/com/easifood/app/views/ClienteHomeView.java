@@ -13,6 +13,7 @@ import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.avatar.Avatar;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
+import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.contextmenu.ContextMenu;
 import com.vaadin.flow.component.html.*;
 import com.vaadin.flow.component.orderedlayout.*;
@@ -29,10 +30,9 @@ import java.text.NumberFormat;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
-@PageTitle("Área Cliente")
 @Route("home-cliente")
 @RolesAllowed("ROLE_CLIENTE")
-public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserver {
+public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserver, AfterNavigationObserver {
 
     private final RestauranteService restauranteService;
     private final ProductoService productoService; // (si no lo usas aquí, puedes quitarlo)
@@ -70,8 +70,8 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
         // ==========================
         // TABS
         // ==========================
-        tabExplorar = new Tab("Explorar");
-        tabPedidos = new Tab("Mis pedidos");
+        tabExplorar = new Tab(getTranslation("cliente.home.tab.explore"));
+        tabPedidos = new Tab(getTranslation("cliente.home.tab.orders"));
         tabExplorar.getStyle().set("cursor", "pointer");
         tabPedidos.getStyle().set("cursor", "pointer");
 
@@ -98,6 +98,14 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
         showContent(tabExplorar);
 
         tabs.addSelectedChangeListener(e -> showContent(e.getSelectedTab()));
+    }
+
+    // ==========================
+    // Title dinámico (porque @PageTitle es estático)
+    // ==========================
+    @Override
+    public void afterNavigation(AfterNavigationEvent event) {
+        UI.getCurrent().getPage().setTitle(getTranslation("cliente.home.pageTitle"));
     }
 
     // ==========================
@@ -140,26 +148,69 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
         center.setAlignItems(FlexComponent.Alignment.CENTER);
         center.setWidthFull();
 
-        H1 title = new H1("EasiFood");
+        H1 title = new H1(getTranslation("app.title"));
         title.getStyle()
                 .set("margin", "0.5rem 0 0.25rem 0")
                 .set("font-weight", "800")
                 .set("font-size", "2.4rem")
                 .set("letter-spacing", "0.5px");
 
-        Span subtitle = new Span("Tu comida, fácil y rápido");
+        Span subtitle = new Span(getTranslation("cliente.home.subtitle"));
         subtitle.getStyle()
                 .set("opacity", "0.7")
                 .set("font-size", "0.95rem");
 
         center.add(title, subtitle);
 
-        Component userMenu = buildUserMenu();
+        Component right = buildRightHeader();
 
-        header.add(leftStub, center, userMenu);
+        header.add(leftStub, center, right);
         header.expand(center);
 
         return header;
+    }
+
+    private Component buildRightHeader() {
+        HorizontalLayout right = new HorizontalLayout();
+        right.setPadding(false);
+        right.setSpacing(true);
+        right.setAlignItems(FlexComponent.Alignment.CENTER);
+
+        ComboBox<Locale> lang = buildLanguageSelector();
+        Component userMenu = buildUserMenu();
+
+        right.add(lang, userMenu);
+        return right;
+    }
+
+    private ComboBox<Locale> buildLanguageSelector() {
+        ComboBox<Locale> lang = new ComboBox<>();
+        Locale es = new Locale("es");
+        Locale en = Locale.ENGLISH;
+
+        lang.setItems(es, en);
+        lang.setItemLabelGenerator(l -> l.getLanguage().equals("es")
+                ? getTranslation("lang.es")
+                : getTranslation("lang.en"));
+
+        Locale current = UI.getCurrent().getLocale();
+        if (current == null) current = es;
+
+        // Normaliza a es/en para que no se quede “es_ES” vs “es”
+        Locale normalized = current.getLanguage().equalsIgnoreCase("en") ? en : es;
+        lang.setValue(normalized);
+
+        lang.setWidth("140px");
+
+        lang.addValueChangeListener(e -> {
+            Locale newLocale = e.getValue();
+            if (newLocale != null) {
+                UI.getCurrent().setLocale(newLocale);
+                UI.getCurrent().getPage().reload();
+            }
+        });
+
+        return lang;
     }
 
     private Component buildUserMenu() {
@@ -167,7 +218,7 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
 
         String nombre = (u != null && u.getNombre() != null && !u.getNombre().isBlank())
                 ? u.getNombre()
-                : "Usuario";
+                : getTranslation("user.defaultName");
 
         Avatar avatar = new Avatar(nombre);
         avatar.setWidth("44px");
@@ -181,8 +232,8 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
         ContextMenu menu = new ContextMenu(avatar);
         menu.setOpenOnClick(true);
 
-        menu.addItem("Mi perfil", e -> UI.getCurrent().navigate("perfil"));
-        menu.addItem("Cerrar sesión", e -> authenticationContext.logout());
+        menu.addItem(getTranslation("user.menu.profile"), e -> UI.getCurrent().navigate("perfil"));
+        menu.addItem(getTranslation("user.menu.logout"), e -> authenticationContext.logout());
 
         HorizontalLayout wrap = new HorizontalLayout(avatar);
         wrap.setPadding(false);
@@ -215,7 +266,7 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
         layout.setSpacing(true);
 
         TextField search = new TextField();
-        search.setPlaceholder("Buscar por nombre...");
+        search.setPlaceholder(getTranslation("cliente.home.search.placeholder"));
         search.setClearButtonVisible(true);
         search.setWidth("360px");
 
@@ -261,7 +312,7 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
         gallery.removeAll();
 
         if (restaurantes.isEmpty()) {
-            Span empty = new Span("No hay restaurantes que coincidan con la búsqueda.");
+            Span empty = new Span(getTranslation("cliente.home.restaurants.empty"));
             empty.getStyle().set("opacity", "0.7");
             gallery.add(empty);
             return;
@@ -287,8 +338,8 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
                 .set("background", "var(--lumo-base-color)")
                 .set("box-shadow", "var(--lumo-box-shadow-s)");
 
-        // 👉 AQUÍ solo UNA vez
-        Image img = new Image(restauranteImageSrc(r), "Foto " + safe(r.getNombre()));
+        Image img = new Image(restauranteImageSrc(r),
+                getTranslation("cliente.home.restaurant.photoAlt", safe(r.getNombre())));
         img.setWidthFull();
         img.setHeight("160px");
         img.getStyle().set("object-fit", "cover");
@@ -300,13 +351,16 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
         H2 name = new H2(safe(r.getNombre()));
         name.getStyle().set("margin", "0");
 
-        Paragraph direccion = new Paragraph("📍 " + safe(r.getDireccion()));
+        Paragraph direccion = new Paragraph(getTranslation("cliente.home.restaurant.addressPrefix") + " " + safe(r.getDireccion()));
         direccion.getStyle().set("margin", "0.25rem 0").set("opacity", "0.85");
 
-        Paragraph meta = new Paragraph("📞 " + safe(r.getTelefono()) + " · ⏰ " + safe(r.getHorario()));
+        Paragraph meta = new Paragraph(
+                getTranslation("cliente.home.restaurant.phonePrefix") + " " + safe(r.getTelefono())
+                        + " · " + getTranslation("cliente.home.restaurant.hoursPrefix") + " " + safe(r.getHorario())
+        );
         meta.getStyle().set("margin", "0").set("opacity", "0.75").set("font-size", "0.9rem");
 
-        Button ver = new Button("Ver carta",
+        Button ver = new Button(getTranslation("cliente.home.restaurant.viewMenu"),
                 e -> UI.getCurrent().navigate("cliente-restaurante/" + r.getId()));
         ver.setWidthFull();
         ver.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
@@ -318,7 +372,6 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
         return card;
     }
 
-
     private String restauranteImageSrc(Restaurante r) {
         String fallback = "/images/restaurantes/default.jpg";
 
@@ -328,26 +381,22 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
 
         String raw = r.getImagenUrl().trim().replace("\\", "/");
 
-        // Si ya viene como URL pública correcta
         if (raw.startsWith("http://") || raw.startsWith("https://")
                 || raw.startsWith("/imagenes/") || raw.startsWith("/uploads/")) {
             return raw;
         }
 
-        // Si guardaste una ruta absoluta del disco que contiene ".../uploads/..."
         int idx = raw.indexOf("/uploads/");
         if (idx >= 0) {
-            String afterUploads = raw.substring(idx + "/uploads/".length()); // e.g. "restaurantes/uuid.jpg"
+            String afterUploads = raw.substring(idx + "/uploads/".length());
             return "/imagenes/" + stripLeadingSlash(afterUploads);
         }
 
-        // Si guardaste algo tipo "uploads/restaurantes/uuid.jpg"
         if (raw.startsWith("uploads/")) {
             String afterUploads = raw.substring("uploads/".length());
             return "/imagenes/" + stripLeadingSlash(afterUploads);
         }
 
-        // Si guardaste "restaurantes/uuid.jpg" o "/restaurantes/uuid.jpg"
         return "/imagenes/" + stripLeadingSlash(raw);
     }
 
@@ -356,13 +405,12 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
         return s.startsWith("/") ? s.substring(1) : s;
     }
 
-
     private String safe(String s) {
         return (s == null || s.isBlank()) ? "-" : s;
     }
 
     // ==========================
-    // TAB PEDIDOS (cards como restaurantes + botón "Ver detalle")
+    // TAB PEDIDOS
     // ==========================
     private Component buildPedidosContent() {
 
@@ -382,7 +430,7 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
 
         Usuario u = getUsuarioActual();
         if (!(u instanceof Cliente cliente)) {
-            Span s = new Span("No se pudo obtener el cliente autenticado.");
+            Span s = new Span(getTranslation("cliente.home.orders.notAuthenticated"));
             s.getStyle().set("opacity", "0.7");
             gallery.add(s);
             layout.add(gallery);
@@ -393,7 +441,7 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
         List<Pedido> pedidos = pedidoService.pedidosDeCliente(cliente);
 
         if (pedidos.isEmpty()) {
-            Span empty = new Span("Aún no tienes pedidos.");
+            Span empty = new Span(getTranslation("cliente.home.orders.empty"));
             empty.getStyle().set("opacity", "0.7");
             gallery.add(empty);
             layout.add(gallery);
@@ -424,7 +472,7 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
         card.getStyle()
                 .set("flex", "1 1 calc(33.333% - 16px)")
                 .set("max-width", "calc(33.333% - 16px)")
-                .set("min-width", "260px")
+                .set("min-width", "260px)")
                 .set("border-radius", "18px")
                 .set("overflow", "hidden")
                 .set("background", "var(--lumo-base-color)")
@@ -447,24 +495,28 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
                 ? p.getEstado()
                 : "-";
 
-        NumberFormat eur = NumberFormat.getCurrencyInstance(new Locale("es", "ES"));
+        // Formato moneda según locale actual
+        Locale locale = UI.getCurrent().getLocale();
+        if (locale == null) locale = new Locale("es", "ES");
+        NumberFormat eur = NumberFormat.getCurrencyInstance(locale);
 
-        H2 title = new H2("Pedido #" + p.getId());
+        H2 title = new H2(getTranslation("cliente.home.orders.cardTitle", p.getId()));
         title.getStyle().set("margin", "0");
 
-        Paragraph restP = new Paragraph("🍴 " + rest);
+        Paragraph restP = new Paragraph(getTranslation("cliente.home.orders.restaurantPrefix") + " " + rest);
         restP.getStyle().set("margin", "0.25rem 0").set("opacity", "0.85");
 
-        Paragraph fechaP = new Paragraph("🕒 " + fechaTxt);
+        Paragraph fechaP = new Paragraph(getTranslation("cliente.home.orders.datePrefix") + " " + fechaTxt);
         fechaP.getStyle().set("margin", "0").set("opacity", "0.75").set("font-size", "0.9rem");
 
-        Paragraph estadoP = new Paragraph("📦 " + estadoTxt);
+        Paragraph estadoP = new Paragraph(getTranslation("cliente.home.orders.statusPrefix") + " " + estadoTxt);
         estadoP.getStyle().set("margin", "0.25rem 0 0 0").set("opacity", "0.85");
 
-        Paragraph totalP = new Paragraph("💶 " + eur.format(p.getTotal()));
+        Paragraph totalP = new Paragraph(getTranslation("cliente.home.orders.totalPrefix") + " " + eur.format(p.getTotal()));
         totalP.getStyle().set("margin", "0.25rem 0 0 0").set("font-weight", "800");
 
-        Button verDetalle = new Button("Ver detalle", e -> UI.getCurrent().navigate("pedido/" + p.getId()));
+        Button verDetalle = new Button(getTranslation("cliente.home.orders.viewDetail"),
+                e -> UI.getCurrent().navigate("pedido/" + p.getId()));
         verDetalle.setWidthFull();
         verDetalle.getStyle()
                 .set("margin-top", "0.75rem")
