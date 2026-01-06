@@ -285,14 +285,10 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
                 .set("border-radius", "18px")
                 .set("overflow", "hidden")
                 .set("background", "var(--lumo-base-color)")
-                .set("box-shadow", "var(--lumo-box-shadow-s)")
-                .set("transition", "transform 0.12s ease-in-out");
+                .set("box-shadow", "var(--lumo-box-shadow-s)");
 
-        String url = (r.getImagenUrl() != null && !r.getImagenUrl().isBlank())
-                ? r.getImagenUrl()
-                : "/images/restaurantes/default.jpg";
-
-        Image img = new Image(url, "Foto " + safe(r.getNombre()));
+        // 👉 AQUÍ solo UNA vez
+        Image img = new Image(restauranteImageSrc(r), "Foto " + safe(r.getNombre()));
         img.setWidthFull();
         img.setHeight("160px");
         img.getStyle().set("object-fit", "cover");
@@ -305,26 +301,61 @@ public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserv
         name.getStyle().set("margin", "0");
 
         Paragraph direccion = new Paragraph("📍 " + safe(r.getDireccion()));
-        direccion.getStyle().set("margin", "0.25rem 0");
-        direccion.getStyle().set("opacity", "0.85");
+        direccion.getStyle().set("margin", "0.25rem 0").set("opacity", "0.85");
 
         Paragraph meta = new Paragraph("📞 " + safe(r.getTelefono()) + " · ⏰ " + safe(r.getHorario()));
-        meta.getStyle().set("margin", "0");
-        meta.getStyle().set("opacity", "0.75");
-        meta.getStyle().set("font-size", "0.9rem");
+        meta.getStyle().set("margin", "0").set("opacity", "0.75").set("font-size", "0.9rem");
 
-        Button ver = new Button("Ver carta", e -> UI.getCurrent().navigate("cliente-restaurante/" + r.getId()));
+        Button ver = new Button("Ver carta",
+                e -> UI.getCurrent().navigate("cliente-restaurante/" + r.getId()));
         ver.setWidthFull();
-        ver.getStyle()
-                .set("margin-top", "0.75rem")
-                .set("font-weight", "600")
-                .set("cursor", "pointer");
         ver.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
+        ver.getStyle().set("margin-top", "0.75rem").set("font-weight", "600");
 
         body.add(name, direccion, meta, ver);
         card.add(img, body);
+
         return card;
     }
+
+
+    private String restauranteImageSrc(Restaurante r) {
+        String fallback = "/images/restaurantes/default.jpg";
+
+        if (r == null || r.getImagenUrl() == null || r.getImagenUrl().isBlank()) {
+            return fallback;
+        }
+
+        String raw = r.getImagenUrl().trim().replace("\\", "/");
+
+        // Si ya viene como URL pública correcta
+        if (raw.startsWith("http://") || raw.startsWith("https://")
+                || raw.startsWith("/imagenes/") || raw.startsWith("/uploads/")) {
+            return raw;
+        }
+
+        // Si guardaste una ruta absoluta del disco que contiene ".../uploads/..."
+        int idx = raw.indexOf("/uploads/");
+        if (idx >= 0) {
+            String afterUploads = raw.substring(idx + "/uploads/".length()); // e.g. "restaurantes/uuid.jpg"
+            return "/imagenes/" + stripLeadingSlash(afterUploads);
+        }
+
+        // Si guardaste algo tipo "uploads/restaurantes/uuid.jpg"
+        if (raw.startsWith("uploads/")) {
+            String afterUploads = raw.substring("uploads/".length());
+            return "/imagenes/" + stripLeadingSlash(afterUploads);
+        }
+
+        // Si guardaste "restaurantes/uuid.jpg" o "/restaurantes/uuid.jpg"
+        return "/imagenes/" + stripLeadingSlash(raw);
+    }
+
+    private String stripLeadingSlash(String s) {
+        if (s == null) return "";
+        return s.startsWith("/") ? s.substring(1) : s;
+    }
+
 
     private String safe(String s) {
         return (s == null || s.isBlank()) ? "-" : s;

@@ -272,7 +272,6 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
                 .withValidator(new EmailValidator("Correo inválido"))
                 .bind(b -> b.correo, (b, v) -> b.correo = v);
 
-        // ✅ hace que el mensaje “Correo inválido” salga al escribir
         correo.addValueChangeListener(e -> binder.validate());
 
         binder.forField(contra)
@@ -293,7 +292,6 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
         requiredNote.getStyle().set("font-size", "0.85rem");
         requiredNote.getStyle().set("color", "var(--lumo-secondary-text-color)");
 
-        // Layout
         VerticalLayout layout = new VerticalLayout(
                 nombre, apellidos, correo, contra, direccion1, direccion2,
                 requiredNote,
@@ -313,9 +311,7 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
         Button cancelar = new Button("Cancelar", e -> dialog.close());
         cancelar.getStyle().set("cursor", "pointer");
 
-        // Estado del upload (lo llevamos nosotros) - sin deprecated listeners
         final boolean[] uploading = { false };
-
         Runnable refresh = () -> registrar.setEnabled(binder.isValid() && !uploading[0]);
 
         binder.addStatusChangeListener(e -> refresh.run());
@@ -384,7 +380,7 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
     }
 
     // ============================================================
-    // REGISTRO DE GERENTE (VALIDADO)
+    // REGISTRO DE GERENTE (VALIDADO) + 2 UPLOADS
     // ============================================================
     private void openRegisterGerenteDialog(UsuarioService usuarioService,
                                            FileStorageService fileStorageService) {
@@ -426,17 +422,19 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
         aforo.setStepButtonsVisible(true);
         aforo.setHelperText("Número positivo");
 
-        // Foto de perfil (opcional)
-        Image preview = new Image();
-        preview.setVisible(false);
-        preview.setWidth("110px");
-        preview.setHeight("110px");
-        preview.getStyle().set("border-radius", "50%").set("object-fit", "cover");
-        preview.getStyle().set("display", "block");
+        // ==========================
+        // Imagen RESTAURANTE (NUEVO) - debajo de nombreRest
+        // ==========================
+        Image previewRest = new Image();
+        previewRest.setVisible(false);
+        previewRest.setWidthFull();
+        previewRest.setMaxHeight("180px");
+        previewRest.getStyle().set("border-radius", "12px").set("object-fit", "cover");
+        previewRest.getStyle().set("display", "block");
 
-        final String[] imagenUrl = { null };
+        final String[] imagenRestUrl = { null };
 
-        Upload upload = new Upload(
+        Upload uploadRest = new Upload(
                 UploadHandler.inMemory((metadata, bytes) -> {
                     if (bytes == null || bytes.length == 0) return;
 
@@ -445,19 +443,54 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
                             metadata.fileName()
                     );
 
-                    imagenUrl[0] = savedUrl;
+                    imagenRestUrl[0] = savedUrl;
 
-                    preview.setSrc(savedUrl);
-                    preview.setVisible(true);
-                    preview.getElement().callJsFunction("requestContentUpdate");
+                    previewRest.setSrc(savedUrl);
+                    previewRest.setVisible(true);
+                    previewRest.getElement().callJsFunction("requestContentUpdate");
                 })
         );
 
-        upload.setAcceptedFileTypes("image/jpeg", "image/png", "image/webp");
-        upload.setMaxFiles(1);
-        upload.setMaxFileSize(3 * 1024 * 1024);
-        upload.setDropLabel(new Span("Arrastra tu foto aquí o pulsa para seleccionar"));
-        upload.getStyle().set("cursor", "pointer");
+        uploadRest.setAcceptedFileTypes("image/jpeg", "image/png", "image/webp");
+        uploadRest.setMaxFiles(1);
+        uploadRest.setMaxFileSize(3 * 1024 * 1024);
+        uploadRest.setDropLabel(new Span("Arrastra la imagen del restaurante aquí o pulsa para seleccionar"));
+        uploadRest.getStyle().set("cursor", "pointer");
+
+        // ==========================
+        // Foto PERFIL GERENTE (la que ya tenías)
+        // ==========================
+        Image previewGerente = new Image();
+        previewGerente.setVisible(false);
+        previewGerente.setWidth("110px");
+        previewGerente.setHeight("110px");
+        previewGerente.getStyle().set("border-radius", "50%").set("object-fit", "cover");
+        previewGerente.getStyle().set("display", "block");
+
+        final String[] imagenGerenteUrl = { null };
+
+        Upload uploadGerente = new Upload(
+                UploadHandler.inMemory((metadata, bytes) -> {
+                    if (bytes == null || bytes.length == 0) return;
+
+                    String savedUrl = fileStorageService.saveUserImage(
+                            new ByteArrayInputStream(bytes),
+                            metadata.fileName()
+                    );
+
+                    imagenGerenteUrl[0] = savedUrl;
+
+                    previewGerente.setSrc(savedUrl);
+                    previewGerente.setVisible(true);
+                    previewGerente.getElement().callJsFunction("requestContentUpdate");
+                })
+        );
+
+        uploadGerente.setAcceptedFileTypes("image/jpeg", "image/png", "image/webp");
+        uploadGerente.setMaxFiles(1);
+        uploadGerente.setMaxFileSize(3 * 1024 * 1024);
+        uploadGerente.setDropLabel(new Span("Arrastra tu foto aquí o pulsa para seleccionar"));
+        uploadGerente.getStyle().set("cursor", "pointer");
 
         // Binder + validaciones
         GerenteReg bean = new GerenteReg();
@@ -478,7 +511,6 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
                 .withValidator(new EmailValidator("Correo inválido"))
                 .bind(b -> b.correo, (b, v) -> b.correo = v);
 
-        // ✅ hace que el mensaje “Correo inválido” salga al escribir
         correo.addValueChangeListener(e -> binder.validate());
 
         binder.forField(contra)
@@ -516,13 +548,22 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
         requiredNote.getStyle().set("font-size", "0.85rem");
         requiredNote.getStyle().set("color", "var(--lumo-secondary-text-color)");
 
+        // 👇 IMPORTANTE: imagen restaurante justo debajo de nombreRest
         VerticalLayout layout = new VerticalLayout(
                 nombre, apellidos, correo, contra,
-                nombreRest, direccion, aforo, telefono, horario,
-                requiredNote,
-                new Span("Foto de perfil (opcional)"),
-                upload,
-                preview
+                nombreRest,
+
+                new Span("Imagen del restaurante (opcional)"),
+                uploadRest,
+                previewRest,
+
+                direccion, aforo, telefono, horario,
+
+                new Span("Foto de perfil del gerente (opcional)"),
+                uploadGerente,
+                previewGerente,
+
+                requiredNote
         );
 
         layout.setSpacing(false);
@@ -537,34 +578,35 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
         Button cancelar = new Button("Cancelar", e -> dialog.close());
         cancelar.getStyle().set("cursor", "pointer");
 
-        // Estado del upload (lo llevamos nosotros) - sin deprecated listeners
-        final boolean[] uploading = { false };
-
-        Runnable refresh = () -> registrar.setEnabled(binder.isValid() && !uploading[0]);
+        // Estado de uploads (2 uploads)
+        final int[] uploadingCount = { 0 };
+        Runnable refresh = () -> registrar.setEnabled(binder.isValid() && uploadingCount[0] == 0);
 
         binder.addStatusChangeListener(e -> refresh.run());
 
-        upload.getElement().addEventListener("upload-start", e -> {
-            uploading[0] = true;
+        Runnable inc = () -> { uploadingCount[0]++; refresh.run(); };
+        Runnable dec = () -> { uploadingCount[0] = Math.max(0, uploadingCount[0] - 1); refresh.run(); };
+
+        // --- Restaurante
+        uploadRest.getElement().addEventListener("upload-start", e -> inc.run());
+        uploadRest.getElement().addEventListener("upload-success", e -> dec.run());
+        uploadRest.getElement().addEventListener("upload-error", e -> dec.run());
+        uploadRest.getElement().addEventListener("upload-abort", e -> dec.run());
+        uploadRest.getElement().addEventListener("file-remove", e -> {
+            imagenRestUrl[0] = null;
+            previewRest.setVisible(false);
             refresh.run();
         });
-        upload.getElement().addEventListener("upload-success", e -> {
-            uploading[0] = false;
+
+        // --- Gerente
+        uploadGerente.getElement().addEventListener("upload-start", e -> inc.run());
+        uploadGerente.getElement().addEventListener("upload-success", e -> dec.run());
+        uploadGerente.getElement().addEventListener("upload-error", e -> dec.run());
+        uploadGerente.getElement().addEventListener("upload-abort", e -> dec.run());
+        uploadGerente.getElement().addEventListener("file-remove", e -> {
+            imagenGerenteUrl[0] = null;
+            previewGerente.setVisible(false);
             refresh.run();
-        });
-        upload.getElement().addEventListener("upload-error", e -> {
-            uploading[0] = false;
-            refresh.run();
-        });
-        upload.getElement().addEventListener("upload-abort", e -> {
-            uploading[0] = false;
-            refresh.run();
-        });
-        upload.getElement().addEventListener("file-remove", e -> {
-            uploading[0] = false;
-            refresh.run();
-            preview.setVisible(false);
-            imagenUrl[0] = null;
         });
 
         refresh.run();
@@ -573,6 +615,7 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
             try {
                 binder.writeBean(bean);
 
+                // ✅ NUEVO: pasamos 2 imágenes
                 usuarioService.registrarGerente(
                         bean.nombre.trim(),
                         bean.apellidos.trim(),
@@ -583,7 +626,8 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
                         bean.aforo,
                         bean.telefono.trim(),
                         bean.horario.trim(),
-                        imagenUrl[0]
+                        imagenGerenteUrl[0],
+                        imagenRestUrl[0]
                 );
 
                 Notification.show("Registrado correctamente. Ya puedes iniciar sesión.",

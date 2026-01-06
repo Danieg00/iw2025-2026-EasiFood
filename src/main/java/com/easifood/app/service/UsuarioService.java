@@ -93,7 +93,8 @@ public class UsuarioService {
             Integer aforo,
             String telefono,
             String horario,
-            String imagenUrl
+            String imagenGerenteUrl,
+            String imagenRestauranteUrl
     ) {
         if (usuarioRepository.findByCorreo(correo).isPresent()) {
             throw new IllegalArgumentException("El correo ya está registrado");
@@ -108,13 +109,17 @@ public class UsuarioService {
                 telefono,
                 horario
         );
+
+        // ✅ guarda la imagen del restaurante
+        restaurante.setImagenUrl(imagenRestauranteUrl);
+
         restauranteService.save(restaurante);
 
         Gerente gerente = new Gerente(
                 nombre,
                 apellidos,
                 correo,
-                imagenUrl,
+                imagenGerenteUrl,
                 passwordEncriptada,
                 restaurante
         );
