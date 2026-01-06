@@ -13,6 +13,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class PedidoService {
@@ -115,7 +116,6 @@ public class PedidoService {
         }
         Cliente cliente = (Cliente) u;
 
-        // Si llega aquí, asumimos "pago ficticio OK" (lo valida la PagoView)
         BigDecimal total = carritoService.totalPrecio(restauranteId);
         if (total == null || total.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalStateException("El carrito está vacío");
@@ -126,15 +126,80 @@ public class PedidoService {
         pedido.setCliente(cliente);
         pedido.setEmpleado(null);
         pedido.setDireccionEntrega(direccion);
-        pedido.setEstado("PAGADO"); // ✅ como se crea tras pagar
+
+        // ✅ CLAVE: editable solo si está PENDIENTE
+        // Tu PagoView hace el “pago ficticio”, pero el flujo del pedido empieza en PENDIENTE
+        pedido.setEstado("PENDIENTE");
+
         pedido.setFechaCreacion(LocalDateTime.now());
         pedido.setTotal(total);
 
         Pedido guardado = pedidoRepository.save(pedido);
 
-        // ✅ Vaciar carrito SOLO cuando ya se ha "pagado"
+        // ✅ Vaciar carrito solo cuando ya se ha creado el pedido
         carritoService.clear(restauranteId);
 
         return guardado;
     }
+
+    // =========================
+    // LISTAR PEDIDOS DEL CLIENTE (TAB "Mis pedidos")
+    // =========================
+    public List<Pedido> pedidosDeCliente(Cliente cliente) {
+        return pedidoRepository.findByClienteOrderByFechaCreacionDesc(cliente);
+    }
+
+    // =========================
+    // DETALLE SEGURO: PEDIDO SOLO SI ES DEL CLIENTE
+    // (requiere findByIdAndCliente en PedidoRepository)
+    // =========================
+    public Optional<Pedido> pedidoDeCliente(Long pedidoId, Cliente cliente) {
+        if (pedidoId == null || cliente == null) return Optional.empty();
+        return pedidoRepository.findByIdAndCliente(pedidoId, cliente);
+    }
+
+    // =========================
+    // EDITAR SOLO SI ESTÁ PENDIENTE
+    // =========================
+    public Pedido actualizarDireccionEntregaSiPendiente(Long pedidoId, Cliente cliente, String nuevaDireccion) {
+
+        Pedido p = pedidoRepository.findByIdAndCliente(pedidoId, cliente)
+                .orElseThrow(() -> new IllegalArgumentException("Pedido no encontrado"));
+
+        if (!"PENDIENTE".equalsIgnoreCase(p.getEstado())) {
+            throw new IllegalStateException("Solo se puede modificar si está en estado PENDIENTE");
+        }
+
+        if (nuevaDireccion == null || nuevaDireccion.isBlank()) {
+            throw new IllegalArgumentException("La dirección no puede estar vacía");
+        }
+
+        String direccion = nuevaDireccion.trim();
+        if (direccion.length() < 10) {
+            throw new IllegalArgumentException("Dirección demasiado corta (mínimo 10 caracteres)");
+        }
+        if (direccion.length() > 300) {
+            throw new IllegalArgumentException("Dirección demasiado larga (máximo 300 caracteres)");
+        }
+        boolean tieneLetra = direccion.chars().anyMatch(Character::isLetter);
+        if (!tieneLetra) {
+            throw new IllegalArgumentException("La dirección debe contener letras");
+        }
+
+        p.setDireccionEntrega(direccion);
+        return pedidoRepository.save(p);
+    }
+
+    public void cancelarPedidoSiPendiente(Long pedidoId, Cliente cliente) {
+
+        Pedido p = pedidoRepository.findByIdAndCliente(pedidoId, cliente)
+                .orElseThrow(() -> new IllegalArgumentException("Pedido no encontrado"));
+
+        if (!"PENDIENTE".equalsIgnoreCase(p.getEstado())) {
+            throw new IllegalStateException("Solo se puede cancelar si está en estado PENDIENTE");
+        }
+
+        pedidoRepository.delete(p);
+    }
+
 }

@@ -6,7 +6,7 @@ import com.easifood.app.model.Restaurante;
 import com.easifood.app.model.Cliente;
 
 import org.springframework.data.jpa.repository.JpaRepository;
-
+import java.util.Optional;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -29,4 +29,7 @@ public interface PedidoRepository extends JpaRepository<Pedido, Long> {
             LocalDateTime inicio,
             LocalDateTime fin
     );
+
+    List<Pedido> findByClienteOrderByFechaCreacionDesc(Cliente cliente);
+    Optional<Pedido> findByIdAndCliente(Long id, Cliente cliente);
 }

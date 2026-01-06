@@ -2,9 +2,12 @@ package com.easifood.app.views;
 
 import com.easifood.app.model.Restaurante;
 import com.easifood.app.model.Usuario;
+import com.easifood.app.model.Cliente;
+import com.easifood.app.model.Pedido;
 import com.easifood.app.service.ProductoService;
 import com.easifood.app.service.RestauranteService;
 import com.easifood.app.service.UsuarioService;
+import com.easifood.app.service.PedidoService;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.avatar.Avatar;
@@ -16,36 +19,47 @@ import com.vaadin.flow.component.orderedlayout.*;
 import com.vaadin.flow.component.tabs.Tab;
 import com.vaadin.flow.component.tabs.Tabs;
 import com.vaadin.flow.component.textfield.TextField;
-import com.vaadin.flow.router.PageTitle;
-import com.vaadin.flow.router.Route;
+import com.vaadin.flow.router.*;
 import com.vaadin.flow.spring.security.AuthenticationContext;
 import jakarta.annotation.security.RolesAllowed;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.text.NumberFormat;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 @PageTitle("Área Cliente")
 @Route("home-cliente")
 @RolesAllowed("ROLE_CLIENTE")
-public class ClienteHomeView extends VerticalLayout {
+public class ClienteHomeView extends VerticalLayout implements BeforeEnterObserver {
 
     private final RestauranteService restauranteService;
     private final ProductoService productoService; // (si no lo usas aquí, puedes quitarlo)
     private final UsuarioService usuarioService;
     private final AuthenticationContext authenticationContext;
+    private final PedidoService pedidoService;
 
     private final VerticalLayout content = new VerticalLayout();
     private final Map<Tab, Component> tabToContent = new HashMap<>();
 
+    private Tabs tabs;
+    private Tab tabExplorar;
+    private Tab tabPedidos;
+
+    private static final DateTimeFormatter FECHA_FORMAT =
+            DateTimeFormatter.ofPattern("dd/MM/yyyy · HH:mm");
+
     public ClienteHomeView(RestauranteService restauranteService,
                            ProductoService productoService,
                            UsuarioService usuarioService,
-                           AuthenticationContext authenticationContext) {
+                           AuthenticationContext authenticationContext,
+                           PedidoService pedidoService) {
         this.restauranteService = restauranteService;
         this.productoService = productoService;
         this.usuarioService = usuarioService;
         this.authenticationContext = authenticationContext;
+        this.pedidoService = pedidoService;
 
         setSizeFull();
         setPadding(true);
@@ -54,14 +68,14 @@ public class ClienteHomeView extends VerticalLayout {
         add(buildHeader());
 
         // ==========================
-        // TABS (sin carrito)
+        // TABS
         // ==========================
-        Tab tabExplorar = new Tab("Explorar");
-        Tab tabPedidos = new Tab("Mis pedidos");
+        tabExplorar = new Tab("Explorar");
+        tabPedidos = new Tab("Mis pedidos");
         tabExplorar.getStyle().set("cursor", "pointer");
         tabPedidos.getStyle().set("cursor", "pointer");
 
-        Tabs tabs = new Tabs(tabExplorar, tabPedidos);
+        tabs = new Tabs(tabExplorar, tabPedidos);
         tabs.setWidth("auto");
         tabs.getStyle().set("margin-top", "0.5rem");
 
@@ -80,8 +94,32 @@ public class ClienteHomeView extends VerticalLayout {
         add(tabsWrapper, content);
         expand(content);
 
+        // Default (si no viene query param)
         showContent(tabExplorar);
+
         tabs.addSelectedChangeListener(e -> showContent(e.getSelectedTab()));
+    }
+
+    // ==========================
+    // QUERY PARAM: ?tab=pedidos
+    // ==========================
+    @Override
+    public void beforeEnter(BeforeEnterEvent event) {
+        String tab = event.getLocation()
+                .getQueryParameters()
+                .getParameters()
+                .getOrDefault("tab", List.of(""))
+                .stream()
+                .findFirst()
+                .orElse("");
+
+        if ("pedidos".equalsIgnoreCase(tab)) {
+            tabs.setSelectedTab(tabPedidos);
+            showContent(tabPedidos);
+        } else {
+            tabs.setSelectedTab(tabExplorar);
+            showContent(tabExplorar);
+        }
     }
 
     // ==========================
@@ -293,14 +331,120 @@ public class ClienteHomeView extends VerticalLayout {
     }
 
     // ==========================
-    // TAB PEDIDOS (placeholder)
+    // TAB PEDIDOS (cards como restaurantes + botón "Ver detalle")
     // ==========================
     private Component buildPedidosContent() {
+
         VerticalLayout layout = new VerticalLayout();
         layout.setSizeFull();
-        layout.add(new H1("Mis pedidos"));
-        layout.add(new Span("Pendiente: listar pedidos del cliente, modificar/cancelar y generar ticket."));
+        layout.setPadding(false);
+        layout.setSpacing(true);
+
+        FlexLayout gallery = new FlexLayout();
+        gallery.setWidthFull();
+        gallery.getStyle()
+                .set("display", "flex")
+                .set("flex-wrap", "wrap")
+                .set("gap", "16px")
+                .set("justify-content", "center")
+                .set("align-items", "flex-start");
+
+        Usuario u = getUsuarioActual();
+        if (!(u instanceof Cliente cliente)) {
+            Span s = new Span("No se pudo obtener el cliente autenticado.");
+            s.getStyle().set("opacity", "0.7");
+            gallery.add(s);
+            layout.add(gallery);
+            layout.expand(gallery);
+            return layout;
+        }
+
+        List<Pedido> pedidos = pedidoService.pedidosDeCliente(cliente);
+
+        if (pedidos.isEmpty()) {
+            Span empty = new Span("Aún no tienes pedidos.");
+            empty.getStyle().set("opacity", "0.7");
+            gallery.add(empty);
+            layout.add(gallery);
+            layout.expand(gallery);
+            return layout;
+        }
+
+        renderPedidosGallery(gallery, pedidos);
+
+        layout.add(gallery);
+        layout.expand(gallery);
         return layout;
+    }
+
+    private void renderPedidosGallery(FlexLayout gallery, List<Pedido> pedidos) {
+        gallery.removeAll();
+        for (Pedido p : pedidos) {
+            gallery.add(createPedidoCard(p));
+        }
+    }
+
+    private Component createPedidoCard(Pedido p) {
+
+        VerticalLayout card = new VerticalLayout();
+        card.setPadding(false);
+        card.setSpacing(false);
+
+        card.getStyle()
+                .set("flex", "1 1 calc(33.333% - 16px)")
+                .set("max-width", "calc(33.333% - 16px)")
+                .set("min-width", "260px")
+                .set("border-radius", "18px")
+                .set("overflow", "hidden")
+                .set("background", "var(--lumo-base-color)")
+                .set("box-shadow", "var(--lumo-box-shadow-s)");
+
+        VerticalLayout body = new VerticalLayout();
+        body.setPadding(true);
+        body.setSpacing(false);
+        body.setHeightFull();
+
+        String rest = (p.getRestaurante() != null && p.getRestaurante().getNombre() != null)
+                ? p.getRestaurante().getNombre()
+                : "-";
+
+        String fechaTxt = (p.getFechaCreacion() != null)
+                ? p.getFechaCreacion().format(FECHA_FORMAT)
+                : "-";
+
+        String estadoTxt = (p.getEstado() != null && !p.getEstado().isBlank())
+                ? p.getEstado()
+                : "-";
+
+        NumberFormat eur = NumberFormat.getCurrencyInstance(new Locale("es", "ES"));
+
+        H2 title = new H2("Pedido #" + p.getId());
+        title.getStyle().set("margin", "0");
+
+        Paragraph restP = new Paragraph("🍴 " + rest);
+        restP.getStyle().set("margin", "0.25rem 0").set("opacity", "0.85");
+
+        Paragraph fechaP = new Paragraph("🕒 " + fechaTxt);
+        fechaP.getStyle().set("margin", "0").set("opacity", "0.75").set("font-size", "0.9rem");
+
+        Paragraph estadoP = new Paragraph("📦 " + estadoTxt);
+        estadoP.getStyle().set("margin", "0.25rem 0 0 0").set("opacity", "0.85");
+
+        Paragraph totalP = new Paragraph("💶 " + eur.format(p.getTotal()));
+        totalP.getStyle().set("margin", "0.25rem 0 0 0").set("font-weight", "800");
+
+        Button verDetalle = new Button("Ver detalle", e -> UI.getCurrent().navigate("pedido/" + p.getId()));
+        verDetalle.setWidthFull();
+        verDetalle.getStyle()
+                .set("margin-top", "0.75rem")
+                .set("font-weight", "600")
+                .set("cursor", "pointer");
+        verDetalle.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
+
+        body.add(title, restP, fechaP, estadoP, totalP, verDetalle);
+        card.add(body);
+
+        return card;
     }
 
     // ==========================

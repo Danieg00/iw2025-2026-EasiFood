@@ -274,7 +274,7 @@ public class PagoView extends VerticalLayout implements BeforeEnterObserver {
             pedidoService.crearPedido(restauranteId, direccionEntrega);
             VaadinSession.getCurrent().setAttribute("checkout_direccion", null);
             Notification.show("Pedido realizado", 2500, Notification.Position.BOTTOM_CENTER);
-            UI.getCurrent().navigate("home-cliente");
+            UI.getCurrent().navigate("home-cliente?tab=pedidos");
         } catch (Exception ex) {
             Notification.show("No se pudo completar el pago");
         }
