@@ -1,22 +1,29 @@
 package com.easifood.app.views;
 
 import com.easifood.app.model.Producto;
+import com.easifood.app.model.Usuario;
 import com.easifood.app.service.CarritoService;
+import com.easifood.app.service.UsuarioService;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
+import com.vaadin.flow.component.avatar.Avatar;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
+import com.vaadin.flow.component.contextmenu.ContextMenu;
 import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.html.*;
+import com.vaadin.flow.component.icon.Icon;
+import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.orderedlayout.*;
-import com.vaadin.flow.component.textfield.EmailField;
 import com.vaadin.flow.component.textfield.TextArea;
-import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.data.binder.Binder;
 import com.vaadin.flow.router.*;
+import com.vaadin.flow.server.VaadinSession;
+import com.vaadin.flow.spring.security.AuthenticationContext;
 import jakarta.annotation.security.RolesAllowed;
-
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
 import java.text.NumberFormat;
@@ -29,6 +36,8 @@ import java.util.Locale;
 public class CheckoutView extends VerticalLayout implements BeforeEnterObserver {
 
     private final CarritoService carritoService;
+    private final UsuarioService usuarioService;
+    private final AuthenticationContext authenticationContext;
 
     private Long restauranteId;
 
@@ -37,24 +46,101 @@ public class CheckoutView extends VerticalLayout implements BeforeEnterObserver 
     private final VerticalLayout resumenBox = new VerticalLayout();
     private final Span totalSpan = new Span();
 
-    public CheckoutView(CarritoService carritoService) {
+    public CheckoutView(CarritoService carritoService,
+                        UsuarioService usuarioService,
+                        AuthenticationContext authenticationContext) {
         this.carritoService = carritoService;
+        this.usuarioService = usuarioService;
+        this.authenticationContext = authenticationContext;
 
         setSizeFull();
         setPadding(true);
         setSpacing(true);
 
-        add(buildTopBar());
+        add(buildHeader());
         add(buildLayout());
     }
 
-    private Component buildTopBar() {
-        HorizontalLayout top = new HorizontalLayout();
-        top.setWidthFull();
-        top.setAlignItems(Alignment.CENTER);
-        top.getStyle().set("gap", "14px");
+    // ==========================
+    // HEADER (con botón volver estilo PerfilView)
+    // ==========================
+    private Component buildHeader() {
+        HorizontalLayout header = new HorizontalLayout();
+        header.setWidthFull();
+        header.setPadding(false);
+        header.setSpacing(false);
+        header.setAlignItems(FlexComponent.Alignment.CENTER);
 
-        Button back = new Button("⬅ Volver", e -> {
+        // Izquierda: botón volver (mismo estilo que PerfilView)
+        Button back = buildBackButton();
+
+        VerticalLayout center = new VerticalLayout();
+        center.setPadding(false);
+        center.setSpacing(false);
+        center.setAlignItems(FlexComponent.Alignment.CENTER);
+        center.setWidthFull();
+
+        H1 title = new H1("EasiFood");
+        title.getStyle()
+                .set("margin", "0.5rem 0 0.25rem 0")
+                .set("font-weight", "800")
+                .set("font-size", "2.4rem")
+                .set("letter-spacing", "0.5px")
+                .set("cursor", "pointer");
+
+        title.addClickListener(e ->
+                UI.getCurrent().navigate("home-cliente")
+        );
+
+        Span subtitle = new Span("Checkout");
+        subtitle.getStyle()
+                .set("opacity", "0.7")
+                .set("font-size", "0.95rem");
+
+        center.add(title, subtitle);
+
+        Component userMenu = buildUserMenu();
+
+        header.add(back, center, userMenu);
+        header.expand(center);
+
+        return header;
+    }
+
+    /**
+     * Botón volver idéntico al de PerfilView:
+     * - Icono circular 42x42
+     * - Hover con background + halo
+     * - Accesible (title/aria-label)
+     * - Navega a restaurante o home-cliente
+     */
+    private Button buildBackButton() {
+        Button back = new Button(new Icon(VaadinIcon.ARROW_LEFT));
+        back.addThemeVariants(ButtonVariant.LUMO_TERTIARY, ButtonVariant.LUMO_ICON);
+
+        back.getStyle()
+                .set("border-radius", "999px")
+                .set("width", "42px")
+                .set("height", "42px")
+                .set("padding", "0")
+                .set("cursor", "pointer")
+                .set("transition", "background-color 160ms ease, box-shadow 160ms ease");
+
+        back.getElement().setProperty("title", "Volver");
+        back.getElement().setAttribute("aria-label", "Volver");
+
+        back.getElement().addEventListener("mouseenter", e ->
+                back.getStyle()
+                        .set("background", "var(--lumo-contrast-10pct)")
+                        .set("box-shadow", "0 0 0 6px var(--lumo-contrast-10pct)")
+        );
+        back.getElement().addEventListener("mouseleave", e ->
+                back.getStyle()
+                        .set("background", "transparent")
+                        .set("box-shadow", "none")
+        );
+
+        back.addClickListener(e -> {
             if (restauranteId != null) {
                 UI.getCurrent().navigate("cliente-restaurante/" + restauranteId);
             } else {
@@ -62,13 +148,47 @@ public class CheckoutView extends VerticalLayout implements BeforeEnterObserver 
             }
         });
 
-        H2 title = new H2("Checkout");
-        title.getStyle().set("margin", "0");
-
-        top.add(back, title);
-        return top;
+        return back;
     }
 
+    private Component buildUserMenu() {
+        Usuario u = getUsuarioActual();
+
+        String nombre = (u != null && u.getNombre() != null && !u.getNombre().isBlank())
+                ? u.getNombre()
+                : "Usuario";
+
+        Avatar avatar = new Avatar(nombre);
+        avatar.setWidth("44px");
+        avatar.setHeight("44px");
+        avatar.getStyle().set("cursor", "pointer");
+
+        if (u != null && u.getImagen() != null && !u.getImagen().isBlank()) {
+            avatar.setImage(u.getImagen());
+        }
+
+        ContextMenu menu = new ContextMenu(avatar);
+        menu.setOpenOnClick(true);
+        menu.addItem("Mi perfil", e -> UI.getCurrent().navigate("perfil"));
+        menu.addItem("Cerrar sesión", e -> authenticationContext.logout());
+
+        HorizontalLayout wrap = new HorizontalLayout(avatar);
+        wrap.setPadding(false);
+        wrap.setSpacing(false);
+        wrap.setAlignItems(FlexComponent.Alignment.CENTER);
+
+        return wrap;
+    }
+
+    private Usuario getUsuarioActual() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || auth.getName() == null) return null;
+        return usuarioService.findByCorreo(auth.getName());
+    }
+
+    // ==========================
+    // LAYOUT PRINCIPAL
+    // ==========================
     private Component buildLayout() {
         HorizontalLayout root = new HorizontalLayout();
         root.setWidthFull();
@@ -105,79 +225,54 @@ public class CheckoutView extends VerticalLayout implements BeforeEnterObserver 
 
         FormLayout form = new FormLayout();
         form.setWidthFull();
-        form.setResponsiveSteps(
-                new FormLayout.ResponsiveStep("0", 1),
-                new FormLayout.ResponsiveStep("720px", 2)
-        );
+        form.setResponsiveSteps(new FormLayout.ResponsiveStep("0", 1));
 
-        TextField nombre = new TextField("Nombre");
-        nombre.setWidthFull();
+        TextArea direccionEntrega = new TextArea("Dirección de entrega");
+        direccionEntrega.setWidthFull();
+        direccionEntrega.setMinHeight("120px");
+        direccionEntrega.setPlaceholder("Calle, número, piso/puerta, indicaciones…");
 
-        TextField telefono = new TextField("Teléfono");
-        telefono.setWidthFull();
-
-        TextField direccion = new TextField("Dirección");
-        direccion.setWidthFull();
-
-        TextField ciudad = new TextField("Ciudad");
-        ciudad.setWidthFull();
-
-        TextField codigoPostal = new TextField("Código postal");
-        codigoPostal.setWidthFull();
-
-        EmailField email = new EmailField("Email (opcional)");
-        email.setWidthFull();
-
-        TextArea notas = new TextArea("Instrucciones (opcional)");
-        notas.setWidthFull();
-        notas.setMinHeight("110px");
-        notas.setPlaceholder("Ej: Portal 2, 3ºB · Llamar al llegar · Sin cebolla...");
-
-        form.add(nombre, telefono);
-        form.add(direccion, ciudad);
-        form.add(codigoPostal, email);
-        form.add(notas);
-        form.setColspan(notas, 2);
+        form.add(direccionEntrega);
 
         CheckoutData data = new CheckoutData();
         binder.setBean(data);
 
-        binder.forField(nombre)
-                .asRequired("El nombre es obligatorio")
-                .bind(CheckoutData::getNombre, CheckoutData::setNombre);
-
-        binder.forField(telefono)
-                .asRequired("El teléfono es obligatorio")
-                .bind(CheckoutData::getTelefono, CheckoutData::setTelefono);
-
-        binder.forField(direccion)
+        binder.forField(direccionEntrega)
                 .asRequired("La dirección es obligatoria")
-                .bind(CheckoutData::getDireccion, CheckoutData::setDireccion);
+                .withValidator(s -> s != null && s.trim().length() >= 10,
+                        "Dirección demasiado corta (mínimo 10 caracteres)")
+                .withValidator(s -> s == null || s.length() <= 300,
+                        "Máximo 300 caracteres")
+                .withValidator(s -> {
+                    if (s == null) return false;
+                    String t = s.trim();
+                    return t.chars().anyMatch(Character::isLetter);
+                }, "La dirección debe contener letras")
+                .bind(CheckoutData::getDireccionEntrega, CheckoutData::setDireccionEntrega);
 
-        binder.forField(ciudad)
-                .asRequired("La ciudad es obligatoria")
-                .bind(CheckoutData::getCiudad, CheckoutData::setCiudad);
+        // ==========================
+        // ACCIONES (más pequeñas + jerarquía: continuar arriba, cancelar abajo)
+        // ==========================
+        Button continuar = new Button("Continuar", e -> continuarPago());
+        continuar.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
+        continuar.getStyle()
+                .set("font-weight", "700")
+                .set("cursor", "pointer")
+                .set("min-width", "160px");
 
-        binder.forField(codigoPostal)
-                .asRequired("El código postal es obligatorio")
-                .bind(CheckoutData::getCodigoPostal, CheckoutData::setCodigoPostal);
+        Button cancelar = new Button("Cancelar", e -> cancelarCheckout());
+        cancelar.addThemeVariants(ButtonVariant.LUMO_TERTIARY);
+        cancelar.getStyle()
+                .set("cursor", "pointer")
+                .set("font-size", "0.9rem")
+                .set("opacity", "0.8");
 
-        binder.forField(email)
-                .bind(CheckoutData::getEmail, CheckoutData::setEmail);
-
-        binder.forField(notas)
-                .bind(CheckoutData::getNotas, CheckoutData::setNotas);
-
-        Button confirmar = new Button("Confirmar pedido", e -> confirmarPedido());
-        confirmar.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
-
-        Button cancelar = new Button("Cancelar", e -> {
-            if (restauranteId != null) UI.getCurrent().navigate("cliente-restaurante/" + restauranteId);
-            else UI.getCurrent().navigate("home-cliente");
-        });
-
-        HorizontalLayout actions = new HorizontalLayout(cancelar, confirmar);
-        actions.setSpacing(true);
+        /* Acciones alineadas a la IZQUIERDA */
+        VerticalLayout actions = new VerticalLayout(continuar, cancelar);
+        actions.setPadding(false);
+        actions.setSpacing(false);
+        actions.setAlignItems(Alignment.START); // 👈 AQUÍ EL CAMBIO
+        actions.getStyle().set("margin-top", "0.5rem");
 
         wrap.add(h, form, actions);
         return wrap;
@@ -190,7 +285,7 @@ public class CheckoutView extends VerticalLayout implements BeforeEnterObserver 
         box.setWidthFull();
 
         box.getStyle()
-                .set("border-radius", "14px")
+                .set("border-radius", "18px")
                 .set("background", "var(--lumo-base-color)")
                 .set("box-shadow", "var(--lumo-box-shadow-s)");
 
@@ -245,17 +340,17 @@ public class CheckoutView extends VerticalLayout implements BeforeEnterObserver 
         totalSpan.setText("Total: " + eur.format(carritoService.totalPrecio(restauranteId)));
     }
 
-    private void confirmarPedido() {
+    private void continuarPago() {
         if (!binder.validate().isOk()) return;
 
-        Notification.show("Pedido confirmado (pendiente guardar en BD)", 2200,
-                Notification.Position.BOTTOM_CENTER);
+        if (carritoService.items(restauranteId).isEmpty()) {
+            Notification.show("Tu carrito está vacío.");
+            UI.getCurrent().navigate("cliente-restaurante/" + restauranteId);
+            return;
+        }
 
-        // Normalmente: crear Pedido + líneas y guardarlo
-        // Si quieres, vaciamos el carrito tras confirmar:
-        carritoService.clear(restauranteId);
-
-        UI.getCurrent().navigate("home-cliente");
+        VaadinSession.getCurrent().setAttribute("checkout_direccion", binder.getBean().getDireccionEntrega());
+        UI.getCurrent().navigate("pago/" + restauranteId);
     }
 
     @Override
@@ -266,7 +361,6 @@ public class CheckoutView extends VerticalLayout implements BeforeEnterObserver 
             return;
         }
 
-        // Si carrito vacío => volver a la carta
         if (carritoService.items(restauranteId).isEmpty()) {
             event.rerouteTo("cliente-restaurante/" + restauranteId);
             return;
@@ -280,33 +374,25 @@ public class CheckoutView extends VerticalLayout implements BeforeEnterObserver 
     }
 
     public static class CheckoutData {
-        private String nombre;
-        private String telefono;
-        private String direccion;
-        private String ciudad;
-        private String codigoPostal;
-        private String email;
-        private String notas;
+        private String direccionEntrega;
 
-        public String getNombre() { return nombre; }
-        public void setNombre(String nombre) { this.nombre = nombre; }
+        public String getDireccionEntrega() { return direccionEntrega; }
+        public void setDireccionEntrega(String direccionEntrega) { this.direccionEntrega = direccionEntrega; }
+    }
 
-        public String getTelefono() { return telefono; }
-        public void setTelefono(String telefono) { this.telefono = telefono; }
+    private void cancelarCheckout() {
+        if (restauranteId == null) {
+            UI.getCurrent().navigate("home-cliente");
+            return;
+        }
 
-        public String getDireccion() { return direccion; }
-        public void setDireccion(String direccion) { this.direccion = direccion; }
+        // Vaciar carrito del restaurante actual
+        carritoService.clear(restauranteId);
 
-        public String getCiudad() { return ciudad; }
-        public void setCiudad(String ciudad) { this.ciudad = ciudad; }
+        // Limpiar dirección de checkout
+        VaadinSession.getCurrent().setAttribute("checkout_direccion", null);
 
-        public String getCodigoPostal() { return codigoPostal; }
-        public void setCodigoPostal(String codigoPostal) { this.codigoPostal = codigoPostal; }
-
-        public String getEmail() { return email; }
-        public void setEmail(String email) { this.email = email; }
-
-        public String getNotas() { return notas; }
-        public void setNotas(String notas) { this.notas = notas; }
+        // Volver al restaurante
+        UI.getCurrent().navigate("cliente-restaurante/" + restauranteId);
     }
 }
