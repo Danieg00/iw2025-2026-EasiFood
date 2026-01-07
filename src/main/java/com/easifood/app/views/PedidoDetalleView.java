@@ -6,6 +6,7 @@ import com.easifood.app.model.PedidoProducto;
 import com.easifood.app.model.Producto;
 import com.easifood.app.model.Usuario;
 import com.easifood.app.service.PedidoService;
+import com.easifood.app.service.TicketPdfService;
 import com.easifood.app.service.UsuarioService;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
@@ -20,13 +21,18 @@ import com.vaadin.flow.component.orderedlayout.*;
 import com.vaadin.flow.component.textfield.TextArea;
 import com.vaadin.flow.data.binder.Binder;
 import com.vaadin.flow.router.*;
+import com.vaadin.flow.server.streams.DownloadHandler;
+import com.vaadin.flow.server.streams.DownloadResponse;
 import jakarta.annotation.security.RolesAllowed;
 
+import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
 import java.text.NumberFormat;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 @PageTitle("Detalle pedido")
 @Route("pedido/:id")
@@ -35,6 +41,7 @@ public class PedidoDetalleView extends VerticalLayout implements BeforeEnterObse
 
     private final PedidoService pedidoService;
     private final UsuarioService usuarioService;
+    private final TicketPdfService ticketPdfService;
 
     private Long pedidoId;
     private Pedido pedido;
@@ -55,6 +62,9 @@ public class PedidoDetalleView extends VerticalLayout implements BeforeEnterObse
     private final Button guardar = new Button("Guardar cambios");
     private final Button volver = buildBackButton();
     private final Button cancelarPedido = new Button("Cancelar pedido");
+
+    // ✅ Ticket PDF (Vaadin 24.8+)
+    private Anchor descargarTicket;
 
     // ✅ Líneas (UI)
     private final VerticalLayout lineasCard = new VerticalLayout();
@@ -82,9 +92,12 @@ public class PedidoDetalleView extends VerticalLayout implements BeforeEnterObse
         }
     }
 
-    public PedidoDetalleView(PedidoService pedidoService, UsuarioService usuarioService) {
+    public PedidoDetalleView(PedidoService pedidoService,
+                             UsuarioService usuarioService,
+                             TicketPdfService ticketPdfService) {
         this.pedidoService = pedidoService;
         this.usuarioService = usuarioService;
+        this.ticketPdfService = ticketPdfService;
 
         setSizeFull();
         setPadding(true);
@@ -142,6 +155,9 @@ public class PedidoDetalleView extends VerticalLayout implements BeforeEnterObse
                 .set("opacity", "0.85");
         cancelarPedido.addClickListener(e -> onCancelarPedido());
 
+        // ✅ Botón descarga (Anchor + DownloadHandler)
+        descargarTicket = buildTicketDownload();
+
         VerticalLayout actions = new VerticalLayout(guardar, cancelarPedido);
         actions.setPadding(false);
         actions.setSpacing(false);
@@ -169,6 +185,9 @@ public class PedidoDetalleView extends VerticalLayout implements BeforeEnterObse
 
         page.add(infoCard, lineasCard, form, actions);
         add(page);
+
+        // hasta que se cargue el pedido
+        descargarTicket.setEnabled(false);
     }
 
     // ==========================
@@ -237,8 +256,51 @@ public class PedidoDetalleView extends VerticalLayout implements BeforeEnterObse
         );
 
         back.addClickListener(e -> UI.getCurrent().navigate("home-cliente?tab=pedidos"));
-
         return back;
+    }
+
+    // ==========================
+    // DOWNLOAD (Vaadin 24.8+)
+    // ==========================
+    private Anchor buildTicketDownload() {
+        Button btn = new Button("Descargar ticket (PDF)");
+        btn.addThemeVariants(ButtonVariant.LUMO_CONTRAST);
+        btn.getStyle().set("font-weight", "700").set("cursor", "pointer");
+
+        // Genera en el momento de descargar, validando usuario/pedido
+        DownloadHandler handler = DownloadHandler.fromInputStream(event -> {
+            try {
+                Usuario u = usuarioService.obtenerUsuarioActual();
+                if (!(u instanceof Cliente cliente)) {
+                    return DownloadResponse.error(403);
+                }
+                if (pedidoId == null) {
+                    return DownloadResponse.error(400);
+                }
+
+                Pedido p = pedidoService.pedidoDeCliente(pedidoId, cliente).orElse(null);
+                if (p == null) {
+                    return DownloadResponse.error(404);
+                }
+
+                byte[] pdf = ticketPdfService.generarTicket(p);
+                String filename = "ticket-pedido-" + p.getId() + ".pdf";
+
+                return new DownloadResponse(
+                        new ByteArrayInputStream(pdf),
+                        filename,
+                        "application/pdf",
+                        (long) pdf.length
+                );
+            } catch (Exception ex) {
+                return DownloadResponse.error(500);
+            }
+        });
+
+        Anchor a = new Anchor(handler, "");
+        a.setTarget("_blank"); // opcional
+        a.add(btn);
+        return a;
     }
 
     // ==========================
@@ -265,11 +327,13 @@ public class PedidoDetalleView extends VerticalLayout implements BeforeEnterObse
             return;
         }
 
-        // ✅ rellenar draft desde BD
         loadDraftFromPedido(pedido);
 
         renderPedido(pedido);
         renderLineasFromDraft();
+
+        // ya hay pedido válido
+        descargarTicket.setEnabled(true);
     }
 
     private void loadDraftFromPedido(Pedido p) {
@@ -310,13 +374,19 @@ public class PedidoDetalleView extends VerticalLayout implements BeforeEnterObse
         H2 t = new H2("Pedido #" + p.getId());
         t.getStyle().set("margin", "0");
 
+        descargarTicket.getStyle()
+                .set("margin-left", "auto"); // empuja a la derecha
+
+        HorizontalLayout titleRow = new HorizontalLayout(t, descargarTicket);
+        titleRow.setWidthFull();
+        titleRow.setAlignItems(Alignment.CENTER);
+
         Span sRest = new Span("Restaurante: " + rest);
         Span sFecha = new Span("Fecha: " + fecha);
         Span sEstado = new Span("Estado: " + estado);
 
-        infoCard.add(t, new Hr(), sRest, sFecha, sEstado);
+        infoCard.add(titleRow, new Hr(), sRest, sFecha, sEstado);
 
-        // Form bean
         FormData data = new FormData();
         data.setDireccionEntrega(p.getDireccionEntrega());
         binder.setBean(data);
@@ -382,7 +452,6 @@ public class PedidoDetalleView extends VerticalLayout implements BeforeEnterObse
             Span subtotal = new Span(EUR.format(d.subtotal()));
             subtotal.getStyle().set("font-weight", "800");
 
-            // ✅ Solo modificable si PENDIENTE
             minus.setEnabled(editable);
             plus.setEnabled(editable);
             remove.setEnabled(editable);
@@ -437,21 +506,18 @@ public class PedidoDetalleView extends VerticalLayout implements BeforeEnterObse
         if (!(u instanceof Cliente cliente)) return;
 
         try {
-            // 1) Dirección (si PENDIENTE)
             pedido = pedidoService.actualizarDireccionEntregaSiPendiente(
                     pedido.getId(),
                     cliente,
                     binder.getBean().getDireccionEntrega()
             );
 
-            // 2) Líneas (draft -> lista updates)
             List<PedidoService.LineaUpdate> updates = draft.values().stream()
                     .map(d -> new PedidoService.LineaUpdate(d.productoId, d.cantidad))
                     .toList();
 
             pedido = pedidoService.actualizarLineasSiPendiente(pedido.getId(), cliente, updates);
 
-            // recargar draft desde el pedido guardado (por consistencia)
             loadDraftFromPedido(pedido);
 
             renderPedido(pedido);

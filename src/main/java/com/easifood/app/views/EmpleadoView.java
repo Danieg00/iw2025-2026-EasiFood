@@ -35,10 +35,9 @@ import java.math.BigDecimal;
 
 
 
-@PageTitle("Área Repartidor Test")
+@PageTitle("Área Empleado")
 @Route("home-empleado")
-@PermitAll
-//@RolesAllowed("ROLE_REPARTIDOR")
+@RolesAllowed({"ROLE_EMPLEADO"}) // o ROLE_EMPLEADO
 
 public class EmpleadoView extends VerticalLayout {
 

@@ -3,6 +3,7 @@ package com.easifood.app.views;
 import com.easifood.app.model.*;
 import com.easifood.app.service.PedidoService;
 import com.easifood.app.service.UsuarioService;
+import com.easifood.app.service.EmpleadoService;
 import com.vaadin.flow.component.avatar.Avatar;
 import com.vaadin.flow.component.contextmenu.ContextMenu;
 import com.vaadin.flow.component.html.*;
@@ -59,6 +60,7 @@ public class GerenteHomeView extends VerticalLayout {
     private final FileStorageService fileStorageService;
     private final UsuarioService usuarioService;
     private final PedidoService pedidoService;
+    private final EmpleadoService empleadoService;
 
     private FlexLayout cardsContainer;
     private Restaurante restauranteActual;
@@ -74,7 +76,8 @@ public class GerenteHomeView extends VerticalLayout {
 
     public GerenteHomeView(EmpleadoRepository empleadoRepository, UsuarioRepository usuarioRepository,
                            RestauranteRepository restauranteRepository, ProductoService productoService,
-                           FileStorageService fileStorageService, UsuarioService usuarioService, PedidoService pedidoService) {
+                           FileStorageService fileStorageService, UsuarioService usuarioService, PedidoService pedidoService,
+                           EmpleadoService empleadoService) {
         this.empleadoRepository = empleadoRepository;
         this.usuarioRepository = usuarioRepository;
         this.restauranteRepository = restauranteRepository;
@@ -82,6 +85,7 @@ public class GerenteHomeView extends VerticalLayout {
         this.fileStorageService = fileStorageService;
         this.usuarioService = usuarioService;
         this.pedidoService = pedidoService;
+        this.empleadoService = empleadoService;
 
         setWidthFull();
         getStyle().set("min-height", "100vh");
@@ -401,13 +405,23 @@ public class GerenteHomeView extends VerticalLayout {
         Upload upload = new Upload(UploadHandler.inMemory((metadata, bytes) -> {
             if (bytes == null || bytes.length == 0) return;
 
-            // Guardamos la imagen usando tu servicio
-            String url = fileStorageService.saveProductImage(new ByteArrayInputStream(bytes), metadata.fileName());
+            // ✅ Empleado -> imagen de usuario (no producto)
+            String url = fileStorageService.saveUserImage(
+                    new ByteArrayInputStream(bytes),
+                    metadata.fileName()
+            );
             imagenUrlSubida[0] = url;
 
-            // Actualizamos la previsualización
-            getUI().ifPresent(ui -> ui.access(() -> preview.setSrc(url)));
+            // ✅ Actualizamos la previsualización
+            getUI().ifPresent(ui -> ui.access(() -> {
+                preview.setSrc(url);
+                preview.setVisible(true);
+            }));
         }));
+        upload.setAcceptedFileTypes("image/jpeg", "image/png", "image/webp");
+        upload.setMaxFiles(1);
+        upload.setDropLabel(new Span("Subir foto..."));
+
         upload.setAcceptedFileTypes("image/jpeg", "image/png", "image/webp");
         upload.setMaxFiles(1);
         upload.setDropLabel(new Span("Subir foto..."));
@@ -437,33 +451,51 @@ public class GerenteHomeView extends VerticalLayout {
         Button guardar = new Button("Guardar", e -> {
             try {
                 binder.writeBean(empleado);
+
+                // Imagen
                 if (imagenUrlSubida[0] != null) {
                     empleado.setImagen(imagenUrlSubida[0]);
                 }
 
-                // IMPORTANTE: Asignar Restaurante y Rol si es nuevo
+                // Restaurante + Rol
                 empleado.setRestaurante(restauranteActual);
-                if (empleado.getRole() == null || empleado.getRole().isEmpty()) {
-                    empleado.setRole("ROLE_EMPLEADO");
+                if (empleado.getRole() == null || empleado.getRole().isBlank()) {
+                    empleado.setRole("ROLE_EMPLEADO"); // ✅ consistente con @RolesAllowed en EmpleadoView
                 }
-                // Gestión de contraseña
+
+                // Password
                 String pass = contraField.getValue();
-                if (empleado.getId() == null && (pass == null || pass.isEmpty())) {
+
+                // Nuevo empleado: password obligatorio
+                if (empleado.getId() == null && (pass == null || pass.isBlank())) {
                     Notification.show("La contraseña es obligatoria para nuevos empleados");
                     return;
                 }
-                if (pass != null && !pass.isEmpty()) {
-                    // Encriptar contraseña aqui si no se hace solo
+
+                // Edición: si no escribe pass, NO la tocamos
+                if (empleado.getId() != null && (pass == null || pass.isBlank())) {
+                    // dejamos la contraseña como está en BD
+                    Empleado existente = empleadoRepository.findById(empleado.getId()).orElse(null);
+                    if (existente != null) {
+                        empleado.setContra(existente.getContra());
+                    }
+                } else if (pass != null && !pass.isBlank()) {
+                    // ponemos en claro; EmpleadoService.guardar() la cifrará
                     empleado.setContra(pass);
                 }
-                empleadoRepository.save(empleado);
+
+                // ✅ GUARDAR SIEMPRE por el service (cifra + normaliza)
+                empleadoService.guardar(empleado);
+
                 refrescarContenido();
                 dialog.close();
                 Notification.show("Empleado guardado correctamente");
+
             } catch (Exception ex) {
-                Notification.show("Error al guardar datos");
+                Notification.show("Error al guardar: " + ex.getMessage());
             }
         });
+        guardar.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
         guardar.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
         Button cancelar = new Button("Cancelar", e -> dialog.close());
         dialog.getFooter().add(cancelar, guardar);
@@ -529,27 +561,24 @@ public class GerenteHomeView extends VerticalLayout {
         }
 
         final String[] imagenUrlSubida = { producto.getImagenUrl() };
-        UI ui = UI.getCurrent();
 
-        Upload upload = new Upload(
-                UploadHandler.inMemory((metadata, bytes) -> {
-                    if (bytes == null || bytes.length == 0) return;
+        Upload upload = new Upload(UploadHandler.inMemory((metadata, bytes) -> {
+            if (bytes == null || bytes.length == 0) return;
 
-                    String savedUrl = fileStorageService.saveProductImage(
-                            new java.io.ByteArrayInputStream(bytes),
-                            metadata.fileName()
-                    );
+            // ✅ Para empleados: guarda en carpeta usuarios (no productos)
+            String url = fileStorageService.saveUserImage(
+                    new ByteArrayInputStream(bytes),
+                    metadata.fileName()
+            );
 
-                    imagenUrlSubida[0] = savedUrl;
+            imagenUrlSubida[0] = url;
 
-                    if (ui != null) {
-                        ui.access(() -> {
-                            preview.setSrc(savedUrl);
-                            preview.setVisible(true);
-                        });
-                    }
-                })
-        );
+            // Actualizamos la previsualización
+            getUI().ifPresent(currentUi -> currentUi.access(() -> {
+                preview.setSrc(url);
+                preview.setVisible(true);
+            }));
+        }));
 
         upload.setAcceptedFileTypes("image/jpeg", "image/png", "image/webp");
         upload.setMaxFiles(1);
@@ -668,27 +697,24 @@ public class GerenteHomeView extends VerticalLayout {
         }
 
         final String[] imagenUrlSubida = { oferta.getImagenUrl() };
-        UI ui = UI.getCurrent();
 
-        Upload upload = new Upload(
-                UploadHandler.inMemory((metadata, bytes) -> {
-                    if (bytes == null || bytes.length == 0) return;
+        Upload upload = new Upload(UploadHandler.inMemory((metadata, bytes) -> {
+            if (bytes == null || bytes.length == 0) return;
 
-                    String savedUrl = fileStorageService.saveProductImage(
-                            new java.io.ByteArrayInputStream(bytes),
-                            metadata.fileName()
-                    );
+            // ✅ Para empleados: guarda en carpeta usuarios (no productos)
+            String url = fileStorageService.saveUserImage(
+                    new ByteArrayInputStream(bytes),
+                    metadata.fileName()
+            );
 
-                    imagenUrlSubida[0] = savedUrl;
+            imagenUrlSubida[0] = url;
 
-                    if (ui != null) {
-                        ui.access(() -> {
-                            preview.setSrc(savedUrl);
-                            preview.setVisible(true);
-                        });
-                    }
-                })
-        );
+            // Actualizamos la previsualización
+            getUI().ifPresent(currentUi -> currentUi.access(() -> {
+                preview.setSrc(url);
+                preview.setVisible(true);
+            }));
+        }));
 
         upload.setAcceptedFileTypes("image/jpeg", "image/png", "image/webp");
         upload.setMaxFiles(1);

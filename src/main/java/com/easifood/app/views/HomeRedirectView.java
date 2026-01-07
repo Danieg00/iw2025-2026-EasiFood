@@ -14,29 +14,34 @@ public class HomeRedirectView extends VerticalLayout {
 
     public HomeRedirectView() {
         setVisible(false);
+        setSizeFull();
     }
 
     @Override
     protected void onAttach(AttachEvent attachEvent) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
-        // OJO: cuando no estás logueado, muchas veces auth existe pero es "anonymousUser"
-        if (auth == null || auth.getAuthorities() == null || auth.getAuthorities().isEmpty()
-                || "anonymousUser".equals(String.valueOf(auth.getPrincipal()))) {
+        // ✅ No logueado (ojo: auth puede existir pero ser anónimo)
+        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getName())) {
             UI.getCurrent().navigate("login");
             return;
         }
 
-        boolean isCliente = auth.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ROLE_CLIENTE"));
+        boolean isEmpleado = auth.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_EMPLEADO".equals(a.getAuthority()) || "ROLE_REPARTIDOR".equals(a.getAuthority()));
 
         boolean isGerente = auth.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ROLE_GERENTE"));
+                .anyMatch(a -> "ROLE_GERENTE".equals(a.getAuthority()));
 
-        if (isCliente) {
-            UI.getCurrent().navigate("home-cliente");
+        boolean isCliente = auth.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_CLIENTE".equals(a.getAuthority()));
+
+        if (isEmpleado) {
+            UI.getCurrent().navigate("home-empleado");
         } else if (isGerente) {
             UI.getCurrent().navigate("home-gerente");
+        } else if (isCliente) {
+            UI.getCurrent().navigate("home-cliente");
         } else {
             UI.getCurrent().navigate("login");
         }
