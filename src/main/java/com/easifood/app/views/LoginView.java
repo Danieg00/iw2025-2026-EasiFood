@@ -438,7 +438,7 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
                 UploadHandler.inMemory((metadata, bytes) -> {
                     if (bytes == null || bytes.length == 0) return;
 
-                    String savedUrl = fileStorageService.saveUserImage(
+                    String savedUrl = fileStorageService.saveRestaurantImage(
                             new ByteArrayInputStream(bytes),
                             metadata.fileName()
                     );
