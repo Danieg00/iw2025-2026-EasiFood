@@ -111,7 +111,7 @@ public class EmpleadoService {
                 correoNorm,
                 imagenUrl,
                 passwordEncriptada,
-                "ROLE_REPARTIDOR",   // o ROLE_EMPLEADO (pon el que uses de verdad)
+                "ROLE_EMPLEADO",   // o ROLE_EMPLEADO (pon el que uses de verdad)
                 puesto,
                 salario,
                 restaurante
