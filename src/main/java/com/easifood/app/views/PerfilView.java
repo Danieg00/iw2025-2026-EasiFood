@@ -23,14 +23,16 @@ import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.component.upload.Upload;
 import com.vaadin.flow.data.binder.Binder;
 import com.vaadin.flow.data.binder.ValidationException;
-import com.vaadin.flow.router.*;
+import com.vaadin.flow.router.PageTitle;
+import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.streams.UploadHandler;
 import com.vaadin.flow.spring.security.AuthenticationContext;
 import jakarta.annotation.security.RolesAllowed;
 
+@PageTitle("Mi perfil")
 @Route("perfil")
 @RolesAllowed({"ROLE_CLIENTE", "ROLE_GERENTE"})
-public class PerfilView extends VerticalLayout implements AfterNavigationObserver {
+public class PerfilView extends VerticalLayout {
 
     private final UsuarioService usuarioService;
     private final AuthenticationContext authenticationContext;
@@ -90,14 +92,14 @@ public class PerfilView extends VerticalLayout implements AfterNavigationObserve
 
         String correoAuth = authenticationContext.getPrincipalName().orElse(null);
         if (correoAuth == null) {
-            page.add(new Paragraph(getTranslation("profile.error.noAuthUser")));
+            page.add(new Paragraph("No se pudo obtener el usuario autenticado."));
             add(page);
             return;
         }
 
         usuario = usuarioService.findByCorreo(correoAuth);
         if (usuario == null) {
-            page.add(new Paragraph(getTranslation("profile.error.notFound")));
+            page.add(new Paragraph("No se encontró el usuario en la base de datos."));
             add(page);
             return;
         }
@@ -105,7 +107,7 @@ public class PerfilView extends VerticalLayout implements AfterNavigationObserve
         imagenOriginal = usuario.getImagen();
         imagenActual = imagenOriginal;
 
-        H1 title = new H1(getTranslation("profile.title"));
+        H1 title = new H1("Mi perfil");
         title.getStyle().set("margin", "0.25rem 0 0.5rem 0");
         page.add(title);
 
@@ -147,12 +149,6 @@ public class PerfilView extends VerticalLayout implements AfterNavigationObserve
         add(page);
     }
 
-    // Título dinámico (i18n)
-    @Override
-    public void afterNavigation(AfterNavigationEvent event) {
-        UI.getCurrent().getPage().setTitle(getTranslation("profile.pageTitle"));
-    }
-
     // ==========================
     // TOP BAR
     // ==========================
@@ -179,8 +175,8 @@ public class PerfilView extends VerticalLayout implements AfterNavigationObserve
                 .set("cursor", "pointer")
                 .set("transition", "background-color 160ms ease, box-shadow 160ms ease");
 
-        back.getElement().setProperty("title", getTranslation("common.back"));
-        back.getElement().setAttribute("aria-label", getTranslation("common.back"));
+        back.getElement().setProperty("title", "Volver");
+        back.getElement().setAttribute("aria-label", "Volver");
 
         back.getElement().addEventListener("mouseenter", e ->
                 back.getStyle()
@@ -198,7 +194,7 @@ public class PerfilView extends VerticalLayout implements AfterNavigationObserve
     }
 
     private Button buildLogoutButton(AuthenticationContext authenticationContext) {
-        Button logout = new Button(getTranslation("user.menu.logout"), e -> authenticationContext.logout());
+        Button logout = new Button("Cerrar sesión", e -> authenticationContext.logout());
         logout.addThemeVariants(ButtonVariant.LUMO_TERTIARY);
         logout.getStyle().set("cursor", "pointer").set("font-weight", "600");
         return logout;
@@ -226,7 +222,7 @@ public class PerfilView extends VerticalLayout implements AfterNavigationObserve
     // FOTO / AVATAR + UPLOAD
     // ==========================
     private VerticalLayout buildCardFoto(Usuario u) {
-        VerticalLayout card = buildCardBase(getTranslation("profile.photo.title"));
+        VerticalLayout card = buildCardBase("Foto");
         card.setWidth("min(340px, 100%)");
 
         fotoPreview = new Image();
@@ -249,7 +245,7 @@ public class PerfilView extends VerticalLayout implements AfterNavigationObserve
 
         applyPhotoState(imagenActual);
 
-        Span hint = new Span(getTranslation("profile.photo.hint"));
+        Span hint = new Span("Sube una imagen (jpg/png/webp, máx 3MB).");
         hint.getStyle().set("opacity", "0.7").set("font-size", "0.9rem");
 
         UI ui = UI.getCurrent();
@@ -276,7 +272,7 @@ public class PerfilView extends VerticalLayout implements AfterNavigationObserve
         upload.setWidthFull();
         upload.getStyle().set("cursor", "pointer");
 
-        Button quitar = new Button(getTranslation("profile.photo.remove"), e -> {
+        Button quitar = new Button("Quitar foto", e -> {
             imagenActual = null;
             applyPhotoStateNow();
         });
@@ -296,7 +292,7 @@ public class PerfilView extends VerticalLayout implements AfterNavigationObserve
 
         if (url != null && !url.isBlank()) {
             fotoPreview.setSrc(url);
-            fotoPreview.setAlt(getTranslation("profile.photo.alt"));
+            fotoPreview.setAlt("Foto de perfil");
             photoCenter.add(fotoPreview);
         } else {
             avatarFallback.setName(safe(usuario.getNombre()));
@@ -308,7 +304,7 @@ public class PerfilView extends VerticalLayout implements AfterNavigationObserve
     // DATOS (nombre/apellidos/direcciones)
     // ==========================
     private VerticalLayout buildCardDatos(Usuario u) {
-        VerticalLayout card = buildCardBase(getTranslation("profile.data.title"));
+        VerticalLayout card = buildCardBase("Datos");
         card.setWidthFull();
 
         FormLayout form = new FormLayout();
@@ -318,8 +314,8 @@ public class PerfilView extends VerticalLayout implements AfterNavigationObserve
                 new FormLayout.ResponsiveStep("720px", 2)
         );
 
-        nombre = new TextField(getTranslation("register.field.firstName"));
-        apellidos = new TextField(getTranslation("register.field.lastName"));
+        nombre = new TextField("Nombre");
+        apellidos = new TextField("Apellidos");
         nombre.setWidthFull();
         apellidos.setWidthFull();
 
@@ -327,8 +323,8 @@ public class PerfilView extends VerticalLayout implements AfterNavigationObserve
 
         boolean esCliente = (u instanceof Cliente);
 
-        direccion1 = new TextField(getTranslation("register.client.field.address1"));
-        direccion2 = new TextField(getTranslation("register.client.field.address2"));
+        direccion1 = new TextField("Dirección 1");
+        direccion2 = new TextField("Dirección 2");
         direccion1.setWidthFull();
         direccion2.setWidthFull();
 
@@ -338,11 +334,11 @@ public class PerfilView extends VerticalLayout implements AfterNavigationObserve
 
         // Binder usuario
         binderUsuario.forField(nombre)
-                .asRequired(getTranslation("register.validation.firstName.required"))
+                .asRequired("El nombre es obligatorio")
                 .bind(Usuario::getNombre, Usuario::setNombre);
 
         binderUsuario.forField(apellidos)
-                .asRequired(getTranslation("register.validation.lastName.required"))
+                .asRequired("Los apellidos son obligatorios")
                 .bind(Usuario::getApellidos, Usuario::setApellidos);
 
         binderUsuario.readBean(u);
@@ -352,7 +348,7 @@ public class PerfilView extends VerticalLayout implements AfterNavigationObserve
             Cliente c = (Cliente) u;
 
             binderCliente.forField(direccion1)
-                    .asRequired(getTranslation("register.validation.address1.required"))
+                    .asRequired("La dirección 1 es obligatoria")
                     .bind(Cliente::getDireccion1, Cliente::setDireccion1);
 
             binderCliente.forField(direccion2)
@@ -369,25 +365,25 @@ public class PerfilView extends VerticalLayout implements AfterNavigationObserve
     // SEGURIDAD (correo + pass) SIN botones aquí
     // ==========================
     private Component buildCardSeguridad(Usuario u) {
-        VerticalLayout card = buildCardBase(getTranslation("profile.security.title"));
+        VerticalLayout card = buildCardBase("Seguridad");
         card.setWidthFull();
 
-        correoEditable = new EmailField(getTranslation("profile.security.email"));
+        correoEditable = new EmailField("Correo");
         correoEditable.setWidthFull();
         correoEditable.setValue(safe(u.getCorreo()));
         correoEditable.setClearButtonVisible(true);
 
-        Span hintCorreo = new Span(getTranslation("profile.security.email.hint"));
+        Span hintCorreo = new Span("Si cambias el correo tendrás que iniciar sesión de nuevo.");
         hintCorreo.getStyle().set("opacity", "0.7").set("font-size", "0.9rem");
 
-        passActual = new PasswordField(getTranslation("profile.security.pass.current"));
-        passNueva = new PasswordField(getTranslation("profile.security.pass.new"));
-        passRepetir = new PasswordField(getTranslation("profile.security.pass.repeat"));
+        passActual = new PasswordField("Contraseña actual");
+        passNueva = new PasswordField("Nueva contraseña");
+        passRepetir = new PasswordField("Repetir nueva contraseña");
         passActual.setWidthFull();
         passNueva.setWidthFull();
         passRepetir.setWidthFull();
 
-        Span hintPass = new Span(getTranslation("profile.security.pass.hint"));
+        Span hintPass = new Span("Para cambiar contraseña, rellena los 3 campos.");
         hintPass.getStyle().set("opacity", "0.7").set("font-size", "0.9rem");
 
         FormLayout passForm = new FormLayout(passActual, passNueva, passRepetir);
@@ -405,11 +401,11 @@ public class PerfilView extends VerticalLayout implements AfterNavigationObserve
     // BOTONES ÚNICOS
     // ==========================
     private HorizontalLayout buildBottomActions() {
-        guardarUnico = new Button(getTranslation("profile.actions.save"));
+        guardarUnico = new Button("Guardar cambios");
         guardarUnico.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
         guardarUnico.getStyle().set("cursor", "pointer").set("font-weight", "800");
 
-        cancelar = new Button(getTranslation("common.cancel"));
+        cancelar = new Button("Cancelar");
         cancelar.addThemeVariants(ButtonVariant.LUMO_TERTIARY);
         cancelar.getStyle().set("cursor", "pointer");
 
@@ -420,20 +416,22 @@ public class PerfilView extends VerticalLayout implements AfterNavigationObserve
         actions.setWidthFull();
         actions.setJustifyContentMode(JustifyContentMode.END);
         actions.setAlignItems(Alignment.CENTER);
-        actions.getStyle().set("padding", "0 2px");
+        actions.getStyle().set("padding", "0 2px"); // pequeño ajuste visual
 
         return actions;
     }
 
     private void onGuardarTodo() {
+        // Inputs seguridad
         String nuevoCorreo = correoEditable.getValue() == null ? "" : correoEditable.getValue().trim();
         String correoActual = usuario.getCorreo() == null ? "" : usuario.getCorreo().trim();
 
         boolean quiereCambiarPass =
                 !(isBlank(passActual.getValue()) && isBlank(passNueva.getValue()) && isBlank(passRepetir.getValue()));
 
+        // Validaciones rápidas
         if (nuevoCorreo.isBlank()) {
-            Notification.show(getTranslation("profile.validation.email.empty"), 2300, Notification.Position.TOP_CENTER);
+            Notification.show("El correo no puede estar vacío", 2300, Notification.Position.TOP_CENTER);
             return;
         }
 
@@ -443,15 +441,15 @@ public class PerfilView extends VerticalLayout implements AfterNavigationObserve
             String r = passRepetir.getValue();
 
             if (isBlank(a) || isBlank(n) || isBlank(r)) {
-                Notification.show(getTranslation("profile.validation.pass.fillAll"), 2500, Notification.Position.TOP_CENTER);
+                Notification.show("Para cambiar la contraseña, rellena los 3 campos", 2500, Notification.Position.TOP_CENTER);
                 return;
             }
             if (!n.equals(r)) {
-                Notification.show(getTranslation("profile.validation.pass.noMatch"), 2500, Notification.Position.TOP_CENTER);
+                Notification.show("La nueva contraseña no coincide", 2500, Notification.Position.TOP_CENTER);
                 return;
             }
             if (n.length() < 6) {
-                Notification.show(getTranslation("profile.validation.pass.min6"), 2700, Notification.Position.TOP_CENTER);
+                Notification.show("La nueva contraseña debe tener al menos 6 caracteres", 2700, Notification.Position.TOP_CENTER);
                 return;
             }
         }
@@ -459,23 +457,30 @@ public class PerfilView extends VerticalLayout implements AfterNavigationObserve
         boolean necesitaLogout = false;
 
         try {
+            // 1) datos + direcciones
             binderUsuario.writeBean(usuario);
             if (usuario instanceof Cliente c) {
                 binderCliente.writeBean(c);
             }
 
+            // 2) foto
             usuario.setImagen(imagenActual);
+
+            // Guardar datos base
             usuarioService.guardarCambiosPerfil(usuario);
 
+            // 3) correo (si cambió)
             if (!nuevoCorreo.equalsIgnoreCase(correoActual)) {
                 boolean changed = usuarioService.updateCorreo(usuario.getId(), nuevoCorreo);
                 if (changed) {
                     necesitaLogout = true;
+                    // actualizar en memoria para que “cancelar” no lo rompa
                     usuario.setCorreo(nuevoCorreo);
                     correoActual = nuevoCorreo;
                 }
             }
 
+            // 4) contraseña (si pidió)
             if (quiereCambiarPass) {
                 usuarioService.changePassword(usuario.getId(), passActual.getValue(), passNueva.getValue());
                 necesitaLogout = true;
@@ -485,61 +490,66 @@ public class PerfilView extends VerticalLayout implements AfterNavigationObserve
                 passRepetir.clear();
             }
 
+            // commit foto
             imagenOriginal = usuario.getImagen();
 
             if (necesitaLogout) {
-                Notification.show(getTranslation("profile.saved.logout"), 2800, Notification.Position.TOP_CENTER);
+                Notification.show("Cambios guardados. Vuelve a iniciar sesión.", 2800, Notification.Position.TOP_CENTER);
                 authenticationContext.logout();
             } else {
-                Notification.show(getTranslation("profile.saved.ok"), 1500, Notification.Position.BOTTOM_CENTER);
+                Notification.show("Perfil actualizado", 1500, Notification.Position.BOTTOM_CENTER);
             }
 
         } catch (ValidationException ex) {
-            Notification.show(getTranslation("profile.error.checkForm"), 2300, Notification.Position.TOP_CENTER);
+            Notification.show("Revisa los campos del formulario", 2300, Notification.Position.TOP_CENTER);
         } catch (IllegalArgumentException ex) {
             Notification.show(ex.getMessage(), 2700, Notification.Position.TOP_CENTER);
         } catch (Exception ex) {
-            Notification.show(getTranslation("profile.error.save") + ": " + ex.getMessage(), 2700, Notification.Position.TOP_CENTER);
+            Notification.show("Error al guardar: " + ex.getMessage(), 2700, Notification.Position.TOP_CENTER);
         }
     }
 
     private void onCancelarTodo() {
+        // Restaurar binders
         binderUsuario.readBean(usuario);
         if (usuario instanceof Cliente c) {
             binderCliente.readBean(c);
         }
 
+        // Restaurar foto
         imagenActual = imagenOriginal;
         applyPhotoStateNow();
 
+        // Restaurar seguridad (correo)
         correoEditable.setValue(safe(usuario.getCorreo()));
 
+        // limpiar pass
         passActual.clear();
         passNueva.clear();
         passRepetir.clear();
 
-        Notification.show(getTranslation("profile.discarded"), 1200, Notification.Position.BOTTOM_CENTER);
+        Notification.show("Cambios descartados", 1200, Notification.Position.BOTTOM_CENTER);
     }
 
     // ==========================
     // GERENTE: RESTAURANTE
     // ==========================
     private Component buildCardRestaurante(Restaurante r) {
-        VerticalLayout card = buildCardBase(getTranslation("profile.restaurant.title"));
+        VerticalLayout card = buildCardBase("Restaurante (Gerente)");
         card.setWidthFull();
 
         if (r == null) {
-            Span s = new Span(getTranslation("profile.restaurant.none"));
+            Span s = new Span("No tienes restaurante asignado.");
             s.getStyle().set("opacity", "0.7");
             card.add(s);
             return card;
         }
 
         card.add(
-                new Paragraph(getTranslation("profile.restaurant.name") + ": " + safe(r.getNombre())),
-                new Paragraph(getTranslation("profile.restaurant.address") + ": " + safe(r.getDireccion())),
-                new Paragraph(getTranslation("profile.restaurant.phone") + ": " + safe(r.getTelefono())),
-                new Paragraph(getTranslation("profile.restaurant.hours") + ": " + safe(r.getHorario()))
+                new Paragraph("Nombre: " + safe(r.getNombre())),
+                new Paragraph("Dirección: " + safe(r.getDireccion())),
+                new Paragraph("Teléfono: " + safe(r.getTelefono())),
+                new Paragraph("Horario: " + safe(r.getHorario()))
         );
 
         return card;

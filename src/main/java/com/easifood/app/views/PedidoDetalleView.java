@@ -24,9 +24,10 @@ import java.text.NumberFormat;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 
+@PageTitle("Detalle pedido")
 @Route("pedido/:id")
 @RolesAllowed("ROLE_CLIENTE")
-public class PedidoDetalleView extends VerticalLayout implements BeforeEnterObserver, AfterNavigationObserver {
+public class PedidoDetalleView extends VerticalLayout implements BeforeEnterObserver {
 
     private final PedidoService pedidoService;
     private final UsuarioService usuarioService;
@@ -36,15 +37,20 @@ public class PedidoDetalleView extends VerticalLayout implements BeforeEnterObse
 
     private final Binder<FormData> binder = new Binder<>(FormData.class);
 
+    private static final DateTimeFormatter FECHA_FORMAT =
+            DateTimeFormatter.ofPattern("dd/MM/yyyy · HH:mm");
+    private static final NumberFormat EUR =
+            NumberFormat.getCurrencyInstance(new Locale("es", "ES"));
+
     // UI
     private final VerticalLayout page = new VerticalLayout();
     private final VerticalLayout infoCard = new VerticalLayout();
+    private final TextArea direccionEntrega = new TextArea("Dirección de entrega");
 
-    private TextArea direccionEntrega;
+    private final Button guardar = new Button("Guardar cambios");
+    private final Button volver = buildBackButton(); // mismo estilo
 
-    private Button guardar;
-    private Button cancelarPedido;
-    private Button volver;
+    private final Button cancelarPedido = new Button("Cancelar pedido");
 
     public PedidoDetalleView(PedidoService pedidoService, UsuarioService usuarioService) {
         this.pedidoService = pedidoService;
@@ -60,11 +66,6 @@ public class PedidoDetalleView extends VerticalLayout implements BeforeEnterObse
         page.setPadding(false);
         page.setSpacing(true);
 
-        // Botones (se crean aquí para poder usarlos en el header)
-        volver = buildBackButton();
-        guardar = new Button(getTranslation("order.detail.actions.save"));
-        cancelarPedido = new Button(getTranslation("order.detail.actions.cancelOrder"));
-
         page.add(buildHeader());
 
         // Card info
@@ -77,7 +78,6 @@ public class PedidoDetalleView extends VerticalLayout implements BeforeEnterObse
                 .set("box-shadow", "var(--lumo-box-shadow-s)");
 
         // Form
-        direccionEntrega = new TextArea(getTranslation("order.detail.deliveryAddress"));
         direccionEntrega.setWidthFull();
         direccionEntrega.setMinHeight("120px");
 
@@ -87,19 +87,18 @@ public class PedidoDetalleView extends VerticalLayout implements BeforeEnterObse
         form.add(direccionEntrega);
 
         binder.setBean(new FormData());
-
         // ✅ Validación igual que en Checkout (mínimo 10)
         binder.forField(direccionEntrega)
-                .asRequired(getTranslation("checkout.validation.address.required"))
+                .asRequired("La dirección es obligatoria")
                 .withValidator(s -> s != null && s.trim().length() >= 10,
-                        getTranslation("checkout.validation.address.tooShort"))
+                        "Dirección demasiado corta (mínimo 10 caracteres)")
                 .withValidator(s -> s == null || s.length() <= 300,
-                        getTranslation("checkout.validation.address.max"))
+                        "Máximo 300 caracteres")
                 .withValidator(s -> {
                     if (s == null) return false;
                     String t = s.trim();
                     return t.chars().anyMatch(Character::isLetter);
-                }, getTranslation("checkout.validation.address.mustHaveLetters"))
+                }, "La dirección debe contener letras")
                 .bind(FormData::getDireccionEntrega, FormData::setDireccionEntrega);
 
         guardar.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
@@ -113,7 +112,7 @@ public class PedidoDetalleView extends VerticalLayout implements BeforeEnterObse
                 .set("opacity", "0.85");
         cancelarPedido.addClickListener(e -> onCancelarPedido());
 
-        // Acciones: izquierda
+        // Acciones: izquierda, como venís haciendo
         VerticalLayout actions = new VerticalLayout(guardar, cancelarPedido);
         actions.setPadding(false);
         actions.setSpacing(false);
@@ -125,15 +124,7 @@ public class PedidoDetalleView extends VerticalLayout implements BeforeEnterObse
     }
 
     // ==========================
-    // Page title dinámico
-    // ==========================
-    @Override
-    public void afterNavigation(AfterNavigationEvent event) {
-        UI.getCurrent().getPage().setTitle(getTranslation("order.detail.pageTitle"));
-    }
-
-    // ==========================
-    // HEADER
+    // HEADER (mismo estilo general: back + título clicable)
     // ==========================
     private Component buildHeader() {
         HorizontalLayout header = new HorizontalLayout();
@@ -158,7 +149,7 @@ public class PedidoDetalleView extends VerticalLayout implements BeforeEnterObse
 
         title.addClickListener(e -> UI.getCurrent().navigate("home-cliente"));
 
-        Span subtitle = new Span(getTranslation("order.detail.subtitle"));
+        Span subtitle = new Span("Detalle pedido");
         subtitle.getStyle().set("opacity", "0.7");
 
         center.add(title, subtitle);
@@ -172,7 +163,7 @@ public class PedidoDetalleView extends VerticalLayout implements BeforeEnterObse
     }
 
     // ==========================
-    // BACK BUTTON (estilo PagoView)
+    // BACK BUTTON (copiado 1:1 de PagoView)
     // ==========================
     private Button buildBackButton() {
         Button back = new Button(new Icon(VaadinIcon.ARROW_LEFT));
@@ -186,8 +177,8 @@ public class PedidoDetalleView extends VerticalLayout implements BeforeEnterObse
                 .set("cursor", "pointer")
                 .set("transition", "background-color 160ms ease, box-shadow 160ms ease");
 
-        back.getElement().setProperty("title", getTranslation("common.back"));
-        back.getElement().setAttribute("aria-label", getTranslation("common.back"));
+        back.getElement().setProperty("title", "Volver");
+        back.getElement().setAttribute("aria-label", "Volver");
 
         back.getElement().addEventListener("mouseenter", e ->
                 back.getStyle()
@@ -225,7 +216,7 @@ public class PedidoDetalleView extends VerticalLayout implements BeforeEnterObse
 
         pedido = pedidoService.pedidoDeCliente(pedidoId, cliente).orElse(null);
         if (pedido == null) {
-            Notification.show(getTranslation("order.detail.notFound"), 2200, Notification.Position.TOP_CENTER);
+            Notification.show("Pedido no encontrado", 2200, Notification.Position.TOP_CENTER);
             event.rerouteTo("home-cliente?tab=pedidos");
             return;
         }
@@ -236,37 +227,25 @@ public class PedidoDetalleView extends VerticalLayout implements BeforeEnterObse
     private void renderPedido(Pedido p) {
         infoCard.removeAll();
 
-        Locale locale = UI.getCurrent() != null && UI.getCurrent().getLocale() != null
-                ? UI.getCurrent().getLocale()
-                : Locale.getDefault();
-
-        // Fecha: patrón distinto si es EN
-        String datePattern = "en".equalsIgnoreCase(locale.getLanguage())
-                ? "MM/dd/yyyy · HH:mm"
-                : "dd/MM/yyyy · HH:mm";
-
-        DateTimeFormatter fechaFormat = DateTimeFormatter.ofPattern(datePattern, locale);
-        NumberFormat money = NumberFormat.getCurrencyInstance(locale);
-
         String rest = (p.getRestaurante() != null && p.getRestaurante().getNombre() != null)
                 ? p.getRestaurante().getNombre()
                 : "-";
 
         String fecha = (p.getFechaCreacion() != null)
-                ? p.getFechaCreacion().format(fechaFormat)
+                ? p.getFechaCreacion().format(FECHA_FORMAT)
                 : "-";
 
         String estado = (p.getEstado() != null && !p.getEstado().isBlank())
                 ? p.getEstado()
                 : "-";
 
-        H2 t = new H2(getTranslation("order.detail.titleWithId", String.valueOf(p.getId())));
+        H2 t = new H2("Pedido #" + p.getId());
         t.getStyle().set("margin", "0");
 
-        Span sRest = new Span(getTranslation("order.detail.restaurant") + ": " + rest);
-        Span sFecha = new Span(getTranslation("order.detail.date") + ": " + fecha);
-        Span sEstado = new Span(getTranslation("order.detail.status") + ": " + estado);
-        Span sTotal = new Span(getTranslation("order.detail.total") + ": " + money.format(p.getTotal()));
+        Span sRest = new Span("Restaurante: " + rest);
+        Span sFecha = new Span("Fecha: " + fecha);
+        Span sEstado = new Span("Estado: " + estado);
+        Span sTotal = new Span("Total: " + EUR.format(p.getTotal()));
         sTotal.getStyle().set("font-weight", "800");
 
         infoCard.add(t, new Hr(), sRest, sFecha, sEstado, sTotal);
@@ -283,7 +262,7 @@ public class PedidoDetalleView extends VerticalLayout implements BeforeEnterObse
         cancelarPedido.setEnabled(editable);
 
         if (!editable) {
-            direccionEntrega.setHelperText(getTranslation("order.detail.notEditableHelper"));
+            direccionEntrega.setHelperText("Este pedido ya no se puede modificar ni cancelar porque no está en estado PENDIENTE.");
         } else {
             direccionEntrega.setHelperText(null);
         }
@@ -305,7 +284,7 @@ public class PedidoDetalleView extends VerticalLayout implements BeforeEnterObse
             pedido = actualizado;
             renderPedido(pedido);
 
-            Notification.show(getTranslation("order.detail.updated"), 1600, Notification.Position.BOTTOM_CENTER);
+            Notification.show("Pedido actualizado", 1600, Notification.Position.BOTTOM_CENTER);
 
         } catch (IllegalStateException ex) {
             Notification.show(ex.getMessage(), 2400, Notification.Position.TOP_CENTER);
@@ -317,8 +296,7 @@ public class PedidoDetalleView extends VerticalLayout implements BeforeEnterObse
             Notification.show(ex.getMessage(), 2400, Notification.Position.TOP_CENTER);
 
         } catch (Exception ex) {
-            Notification.show(getTranslation("order.detail.updateError") + ": " + ex.getMessage(),
-                    2600, Notification.Position.TOP_CENTER);
+            Notification.show("Error al actualizar: " + ex.getMessage(), 2600, Notification.Position.TOP_CENTER);
         }
     }
 
@@ -329,9 +307,10 @@ public class PedidoDetalleView extends VerticalLayout implements BeforeEnterObse
         if (!(u instanceof Cliente cliente)) return;
 
         try {
+            // ✅ elimina de BD (solo si PENDIENTE) -> implementar en PedidoService
             pedidoService.cancelarPedidoSiPendiente(pedido.getId(), cliente);
 
-            Notification.show(getTranslation("order.detail.cancelled"), 1800, Notification.Position.BOTTOM_CENTER);
+            Notification.show("Pedido cancelado", 1800, Notification.Position.BOTTOM_CENTER);
             UI.getCurrent().navigate("home-cliente?tab=pedidos");
 
         } catch (IllegalStateException ex) {
@@ -345,7 +324,7 @@ public class PedidoDetalleView extends VerticalLayout implements BeforeEnterObse
             UI.getCurrent().navigate("home-cliente?tab=pedidos");
 
         } catch (Exception ex) {
-            Notification.show(getTranslation("order.detail.cancelError") + ": " + ex.getMessage(),
+            Notification.show("No se pudo cancelar el pedido: " + ex.getMessage(),
                     2600, Notification.Position.TOP_CENTER);
         }
     }
@@ -359,7 +338,7 @@ public class PedidoDetalleView extends VerticalLayout implements BeforeEnterObse
         public void setDireccionEntrega(String direccionEntrega) { this.direccionEntrega = direccionEntrega; }
     }
 
-    // Stub para mantener el título centrado
+    // Stub para mantener el título centrado (como en ClienteHomeView)
     private static class DivStub extends Div {
         DivStub(int px) {
             setWidth(px + "px");

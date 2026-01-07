@@ -30,9 +30,10 @@ import java.text.NumberFormat;
 import java.util.List;
 import java.util.Locale;
 
+@PageTitle("Checkout")
 @Route("checkout/:restauranteId")
 @RolesAllowed("ROLE_CLIENTE")
-public class CheckoutView extends VerticalLayout implements BeforeEnterObserver, AfterNavigationObserver {
+public class CheckoutView extends VerticalLayout implements BeforeEnterObserver {
 
     private final CarritoService carritoService;
     private final UsuarioService usuarioService;
@@ -60,21 +61,6 @@ public class CheckoutView extends VerticalLayout implements BeforeEnterObserver,
         add(buildLayout());
     }
 
-    // Título dinámico (i18n)
-    @Override
-    public void afterNavigation(AfterNavigationEvent event) {
-        UI.getCurrent().getPage().setTitle(getTranslation("checkout.pageTitle"));
-    }
-
-    private Locale uiLocale() {
-        Locale l = UI.getCurrent().getLocale();
-        return (l != null) ? l : new Locale("es", "ES");
-    }
-
-    private NumberFormat money() {
-        return NumberFormat.getCurrencyInstance(uiLocale());
-    }
-
     // ==========================
     // HEADER (con botón volver estilo PerfilView)
     // ==========================
@@ -94,7 +80,7 @@ public class CheckoutView extends VerticalLayout implements BeforeEnterObserver,
         center.setAlignItems(FlexComponent.Alignment.CENTER);
         center.setWidthFull();
 
-        H1 title = new H1(getTranslation("app.title"));
+        H1 title = new H1("EasiFood");
         title.getStyle()
                 .set("margin", "0.5rem 0 0.25rem 0")
                 .set("font-weight", "800")
@@ -102,9 +88,11 @@ public class CheckoutView extends VerticalLayout implements BeforeEnterObserver,
                 .set("letter-spacing", "0.5px")
                 .set("cursor", "pointer");
 
-        title.addClickListener(e -> UI.getCurrent().navigate("home-cliente"));
+        title.addClickListener(e ->
+                UI.getCurrent().navigate("home-cliente")
+        );
 
-        Span subtitle = new Span(getTranslation("checkout.subtitle"));
+        Span subtitle = new Span("Checkout");
         subtitle.getStyle()
                 .set("opacity", "0.7")
                 .set("font-size", "0.95rem");
@@ -121,6 +109,10 @@ public class CheckoutView extends VerticalLayout implements BeforeEnterObserver,
 
     /**
      * Botón volver idéntico al de PerfilView:
+     * - Icono circular 42x42
+     * - Hover con background + halo
+     * - Accesible (title/aria-label)
+     * - Navega a restaurante o home-cliente
      */
     private Button buildBackButton() {
         Button back = new Button(new Icon(VaadinIcon.ARROW_LEFT));
@@ -134,8 +126,8 @@ public class CheckoutView extends VerticalLayout implements BeforeEnterObserver,
                 .set("cursor", "pointer")
                 .set("transition", "background-color 160ms ease, box-shadow 160ms ease");
 
-        back.getElement().setProperty("title", getTranslation("common.back"));
-        back.getElement().setAttribute("aria-label", getTranslation("common.back"));
+        back.getElement().setProperty("title", "Volver");
+        back.getElement().setAttribute("aria-label", "Volver");
 
         back.getElement().addEventListener("mouseenter", e ->
                 back.getStyle()
@@ -164,7 +156,7 @@ public class CheckoutView extends VerticalLayout implements BeforeEnterObserver,
 
         String nombre = (u != null && u.getNombre() != null && !u.getNombre().isBlank())
                 ? u.getNombre()
-                : getTranslation("user.defaultName");
+                : "Usuario";
 
         Avatar avatar = new Avatar(nombre);
         avatar.setWidth("44px");
@@ -177,8 +169,8 @@ public class CheckoutView extends VerticalLayout implements BeforeEnterObserver,
 
         ContextMenu menu = new ContextMenu(avatar);
         menu.setOpenOnClick(true);
-        menu.addItem(getTranslation("user.menu.profile"), e -> UI.getCurrent().navigate("perfil"));
-        menu.addItem(getTranslation("user.menu.logout"), e -> authenticationContext.logout());
+        menu.addItem("Mi perfil", e -> UI.getCurrent().navigate("perfil"));
+        menu.addItem("Cerrar sesión", e -> authenticationContext.logout());
 
         HorizontalLayout wrap = new HorizontalLayout(avatar);
         wrap.setPadding(false);
@@ -228,17 +220,17 @@ public class CheckoutView extends VerticalLayout implements BeforeEnterObserver,
         wrap.setPadding(false);
         wrap.setSpacing(true);
 
-        H3 h = new H3(getTranslation("checkout.delivery.title"));
+        H3 h = new H3("Datos de entrega");
         h.getStyle().set("margin", "0");
 
         FormLayout form = new FormLayout();
         form.setWidthFull();
         form.setResponsiveSteps(new FormLayout.ResponsiveStep("0", 1));
 
-        TextArea direccionEntrega = new TextArea(getTranslation("checkout.delivery.address.label"));
+        TextArea direccionEntrega = new TextArea("Dirección de entrega");
         direccionEntrega.setWidthFull();
         direccionEntrega.setMinHeight("120px");
-        direccionEntrega.setPlaceholder(getTranslation("checkout.delivery.address.placeholder"));
+        direccionEntrega.setPlaceholder("Calle, número, piso/puerta, indicaciones…");
 
         form.add(direccionEntrega);
 
@@ -246,39 +238,40 @@ public class CheckoutView extends VerticalLayout implements BeforeEnterObserver,
         binder.setBean(data);
 
         binder.forField(direccionEntrega)
-                .asRequired(getTranslation("checkout.validation.address.required"))
+                .asRequired("La dirección es obligatoria")
                 .withValidator(s -> s != null && s.trim().length() >= 10,
-                        getTranslation("checkout.validation.address.tooShort"))
+                        "Dirección demasiado corta (mínimo 10 caracteres)")
                 .withValidator(s -> s == null || s.length() <= 300,
-                        getTranslation("checkout.validation.address.maxLength"))
+                        "Máximo 300 caracteres")
                 .withValidator(s -> {
                     if (s == null) return false;
                     String t = s.trim();
                     return t.chars().anyMatch(Character::isLetter);
-                }, getTranslation("checkout.validation.address.mustContainLetters"))
+                }, "La dirección debe contener letras")
                 .bind(CheckoutData::getDireccionEntrega, CheckoutData::setDireccionEntrega);
 
         // ==========================
-        // ACCIONES
+        // ACCIONES (más pequeñas + jerarquía: continuar arriba, cancelar abajo)
         // ==========================
-        Button continuar = new Button(getTranslation("common.next"), e -> continuarPago());
+        Button continuar = new Button("Continuar", e -> continuarPago());
         continuar.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
         continuar.getStyle()
                 .set("font-weight", "700")
                 .set("cursor", "pointer")
                 .set("min-width", "160px");
 
-        Button cancelar = new Button(getTranslation("common.cancel"), e -> cancelarCheckout());
+        Button cancelar = new Button("Cancelar", e -> cancelarCheckout());
         cancelar.addThemeVariants(ButtonVariant.LUMO_TERTIARY);
         cancelar.getStyle()
                 .set("cursor", "pointer")
                 .set("font-size", "0.9rem")
                 .set("opacity", "0.8");
 
+        /* Acciones alineadas a la IZQUIERDA */
         VerticalLayout actions = new VerticalLayout(continuar, cancelar);
         actions.setPadding(false);
         actions.setSpacing(false);
-        actions.setAlignItems(Alignment.START);
+        actions.setAlignItems(Alignment.START); // 👈 AQUÍ EL CAMBIO
         actions.getStyle().set("margin-top", "0.5rem");
 
         wrap.add(h, form, actions);
@@ -296,7 +289,7 @@ public class CheckoutView extends VerticalLayout implements BeforeEnterObserver,
                 .set("background", "var(--lumo-base-color)")
                 .set("box-shadow", "var(--lumo-box-shadow-s)");
 
-        H3 title = new H3(getTranslation("checkout.summary.title"));
+        H3 title = new H3("Resumen");
         title.getStyle().set("margin", "0");
 
         resumenBox.setPadding(false);
@@ -312,13 +305,14 @@ public class CheckoutView extends VerticalLayout implements BeforeEnterObserver,
     private void renderResumen() {
         resumenBox.removeAll();
 
+        NumberFormat eur = NumberFormat.getCurrencyInstance(new Locale("es", "ES"));
         List<CarritoService.Item> items = carritoService.items(restauranteId);
 
         if (items.isEmpty()) {
-            Span empty = new Span(getTranslation("checkout.cart.empty"));
+            Span empty = new Span("Tu carrito está vacío.");
             empty.getStyle().set("opacity", "0.7");
             resumenBox.add(empty);
-            totalSpan.setText(getTranslation("common.total") + ": " + money().format(BigDecimal.ZERO));
+            totalSpan.setText("Total: " + eur.format(BigDecimal.ZERO));
             return;
         }
 
@@ -336,21 +330,21 @@ public class CheckoutView extends VerticalLayout implements BeforeEnterObserver,
             BigDecimal precio = (p.getPrecio() != null) ? p.getPrecio() : BigDecimal.ZERO;
             BigDecimal line = precio.multiply(BigDecimal.valueOf(it.getCantidad()));
 
-            Span right = new Span(money().format(line));
+            Span right = new Span(eur.format(line));
             right.getStyle().set("font-weight", "700");
 
             row.add(left, right);
             resumenBox.add(row);
         }
 
-        totalSpan.setText(getTranslation("common.total") + ": " + money().format(carritoService.totalPrecio(restauranteId)));
+        totalSpan.setText("Total: " + eur.format(carritoService.totalPrecio(restauranteId)));
     }
 
     private void continuarPago() {
         if (!binder.validate().isOk()) return;
 
         if (carritoService.items(restauranteId).isEmpty()) {
-            Notification.show(getTranslation("checkout.cart.empty"));
+            Notification.show("Tu carrito está vacío.");
             UI.getCurrent().navigate("cliente-restaurante/" + restauranteId);
             return;
         }
@@ -392,8 +386,13 @@ public class CheckoutView extends VerticalLayout implements BeforeEnterObserver,
             return;
         }
 
+        // Vaciar carrito del restaurante actual
         carritoService.clear(restauranteId);
+
+        // Limpiar dirección de checkout
         VaadinSession.getCurrent().setAttribute("checkout_direccion", null);
+
+        // Volver al restaurante
         UI.getCurrent().navigate("cliente-restaurante/" + restauranteId);
     }
 }

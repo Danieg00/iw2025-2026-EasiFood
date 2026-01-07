@@ -22,9 +22,10 @@ import java.text.NumberFormat;
 import java.util.List;
 import java.util.Locale;
 
+@PageTitle("Restaurante")
 @Route("cliente-restaurante/:id")
 @RolesAllowed("ROLE_CLIENTE")
-public class ClienteRestauranteView extends VerticalLayout implements BeforeEnterObserver, AfterNavigationObserver {
+public class ClienteRestauranteView extends VerticalLayout implements BeforeEnterObserver {
 
     private final RestauranteService restauranteService;
     private final ProductoService productoService;
@@ -32,6 +33,8 @@ public class ClienteRestauranteView extends VerticalLayout implements BeforeEnte
 
     private Long restauranteId;
     private Restaurante restaurante;
+
+    private final NumberFormat eur = NumberFormat.getCurrencyInstance(new Locale("es", "ES"));
 
     // ✅ Área scrolleable de la carta
     private VerticalLayout scrollArea;
@@ -88,21 +91,6 @@ public class ClienteRestauranteView extends VerticalLayout implements BeforeEnte
         add(backdrop, sheet, carritoBar);
     }
 
-    // Page title dinámico (i18n)
-    @Override
-    public void afterNavigation(AfterNavigationEvent event) {
-        UI.getCurrent().getPage().setTitle(getTranslation("cliente.restaurante.pageTitle"));
-    }
-
-    private Locale uiLocale() {
-        Locale l = UI.getCurrent().getLocale();
-        return (l != null) ? l : new Locale("es", "ES");
-    }
-
-    private NumberFormat money() {
-        return NumberFormat.getCurrencyInstance(uiLocale());
-    }
-
     // ✅ helper para “manita” en todos los botones
     private void makePointer(Button b) {
         if (b != null) b.getStyle().set("cursor", "pointer");
@@ -126,8 +114,8 @@ public class ClienteRestauranteView extends VerticalLayout implements BeforeEnte
                 .set("padding", "0")
                 .set("transition", "background-color 160ms ease, box-shadow 160ms ease");
 
-        back.getElement().setProperty("title", getTranslation("common.back"));
-        back.getElement().setAttribute("aria-label", getTranslation("common.back"));
+        back.getElement().setProperty("title", "Volver");
+        back.getElement().setAttribute("aria-label", "Volver");
 
         // Hover visual (halo circular)
         back.getElement().addEventListener("mouseenter", e ->
@@ -176,12 +164,12 @@ public class ClienteRestauranteView extends VerticalLayout implements BeforeEnte
 
         List<Producto> productos = productoService.productosDelRestaurante(restaurante);
 
-        H3 subtitulo = new H3(getTranslation("cliente.restaurante.products.title"));
+        H3 subtitulo = new H3("Productos");
         subtitulo.getStyle().set("margin", "0.75rem 0 0 0");
         scrollArea.add(subtitulo);
 
         if (productos.isEmpty()) {
-            Span empty = new Span(getTranslation("cliente.restaurante.products.empty"));
+            Span empty = new Span("Este restaurante todavía no tiene productos.");
             empty.getStyle().set("opacity", "0.7");
             scrollArea.add(empty);
             return;
@@ -211,24 +199,19 @@ public class ClienteRestauranteView extends VerticalLayout implements BeforeEnte
                 ? r.getImagenUrl()
                 : "/images/restaurantes/default.jpg";
 
-        Image img = new Image(url, getTranslation("cliente.restaurante.restaurant.photoAlt", safe(r.getNombre())));
+        Image img = new Image(url, "Foto " + safe(r.getNombre()));
         img.setWidthFull();
         img.setHeight("220px");
         img.getStyle().set("border-radius", "12px");
         img.getStyle().set("object-fit", "cover");
 
-        H2 title = new H2(getTranslation("cliente.restaurante.menuOf", safe(r.getNombre())));
+        H2 title = new H2("Carta de " + safe(r.getNombre()));
         title.getStyle().set("margin", "0.6rem 0 0 0");
 
-        Paragraph d1 = new Paragraph(
-                getTranslation("cliente.restaurante.restaurant.addressLabel") + " " + safe(r.getDireccion())
-        );
+        Paragraph d1 = new Paragraph("📍 Dirección: " + safe(r.getDireccion()));
         d1.getStyle().set("margin", "0.25rem 0 0 0").set("opacity", "0.85");
 
-        Paragraph d2 = new Paragraph(
-                getTranslation("cliente.restaurante.restaurant.phoneLabel") + " " + safe(r.getTelefono())
-                        + " · " + getTranslation("cliente.restaurante.restaurant.hoursPrefix") + " " + safe(r.getHorario())
-        );
+        Paragraph d2 = new Paragraph("📞 Teléfono: " + safe(r.getTelefono()) + " · ⏰ " + safe(r.getHorario()));
         d2.getStyle().set("margin", "0.1rem 0 0 0").set("opacity", "0.75");
 
         header.add(img, title, d1, d2);
@@ -259,7 +242,7 @@ public class ClienteRestauranteView extends VerticalLayout implements BeforeEnte
                 ? p.getImagenUrl()
                 : "/images/productos/default.jpg";
 
-        Image prodImg = new Image(imgUrl, getTranslation("cliente.restaurante.product.photoAlt", safe(p.getNombre())));
+        Image prodImg = new Image(imgUrl, "Foto " + safe(p.getNombre()));
         prodImg.setWidthFull();
         prodImg.setHeight("160px");
         prodImg.getStyle().set("border-radius", "12px");
@@ -269,20 +252,18 @@ public class ClienteRestauranteView extends VerticalLayout implements BeforeEnte
         H3 nombre = new H3(safe(p.getNombre()));
         nombre.getStyle().set("margin", "0");
 
-        Span precio = new Span(p.getPrecio() != null ? money().format(p.getPrecio()) : "-");
+        Span precio = new Span(p.getPrecio() != null ? eur.format(p.getPrecio()) : "-");
         precio.getStyle().set("font-weight", "700");
 
         Paragraph desc = new Paragraph(safe(p.getDescripcion()));
         desc.getStyle().set("margin", "0.35rem 0 0 0").set("opacity", "0.8");
 
-        Paragraph ing = new Paragraph(
-                getTranslation("cliente.restaurante.product.ingredientsLabel") + " " + safe(p.getIngredientes())
-        );
+        Paragraph ing = new Paragraph("🧾 Ingredientes: " + safe(p.getIngredientes()));
         ing.getStyle().set("margin", "0.25rem 0 0 0")
                 .set("opacity", "0.7")
                 .set("font-size", "0.9rem");
 
-        Button add = new Button(getTranslation("cliente.restaurante.product.add"), new Icon(VaadinIcon.CART_O));
+        Button add = new Button("Añadir", new Icon(VaadinIcon.CART_O));
         add.setWidthFull();
         add.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
         add.getStyle().set("margin-top", "0.7rem");
@@ -290,11 +271,8 @@ public class ClienteRestauranteView extends VerticalLayout implements BeforeEnte
 
         add.addClickListener(e -> {
             carritoService.add(restauranteId, p);
-            Notification.show(
-                    getTranslation("cliente.restaurante.product.addedToast", safe(p.getNombre())),
-                    1100,
-                    Notification.Position.BOTTOM_CENTER
-            );
+            Notification.show("Añadido: " + safe(p.getNombre()), 1100,
+                    Notification.Position.BOTTOM_CENTER);
             updateCarritoUI();
         });
 
@@ -331,7 +309,7 @@ public class ClienteRestauranteView extends VerticalLayout implements BeforeEnte
         Span resumen = new Span("");
         resumen.getStyle().set("font-weight", "800");
 
-        btnCarrito = new Button(getTranslation("cliente.restaurante.cart.view"), new Icon(VaadinIcon.CHEVRON_UP));
+        btnCarrito = new Button("Ver carrito", new Icon(VaadinIcon.CHEVRON_UP));
         btnCarrito.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
         btnCarrito.getStyle().set("font-weight", "700");
         makePointer(btnCarrito);
@@ -363,12 +341,13 @@ public class ClienteRestauranteView extends VerticalLayout implements BeforeEnte
         s.setPadding(false);
         s.setSpacing(false);
 
+        // 🔧 MISMO ancho y centrado que la barra
         s.getStyle()
                 .set("position", "absolute")
                 .set("left", "50%")
-                .set("bottom", FLOAT_BOTTOM)
+                .set("bottom", FLOAT_BOTTOM) // nace desde la misma cota
                 .set("width", FLOAT_WIDTH)
-                .set("transform", "translate(-50%, 110%)")
+                .set("transform", "translate(-50%, 110%)") // oculto
                 .set("z-index", "10")
                 .set("border-radius", "18px 18px 0 0")
                 .set("background", "var(--lumo-base-color)")
@@ -398,9 +377,10 @@ public class ClienteRestauranteView extends VerticalLayout implements BeforeEnte
                 .set("cursor", "pointer")
                 .set("transition", "background-color 160ms ease, box-shadow 160ms ease");
 
-        close.getElement().setProperty("title", getTranslation("common.close"));
-        close.getElement().setAttribute("aria-label", getTranslation("common.close"));
+        close.getElement().setProperty("title", "Cerrar");
+        close.getElement().setAttribute("aria-label", "Cerrar");
 
+        // Hover visual (halo circular)
         close.getElement().addEventListener("mouseenter", e ->
                 close.getStyle()
                         .set("background", "var(--lumo-contrast-10pct)")
@@ -414,7 +394,7 @@ public class ClienteRestauranteView extends VerticalLayout implements BeforeEnte
         );
         makePointer(close);
 
-        H3 title = new H3(getTranslation("cliente.restaurante.cart.title"));
+        H3 title = new H3("Tu carrito");
         title.getStyle().set("margin", "0");
 
         HorizontalLayout header = new HorizontalLayout(title, close);
@@ -428,12 +408,12 @@ public class ClienteRestauranteView extends VerticalLayout implements BeforeEnte
         sheetList.getStyle()
                 .set("padding", "0 14px 12px 14px")
                 .set("overflow", "auto")
-                .set("max-height", "calc(70vh - 130px)");
+                .set("max-height", "calc(70vh - 130px)"); // deja espacio a header+footer
 
         sheetTotal = new Span("");
         sheetTotal.getStyle().set("font-weight", "900").set("font-size", "1.05rem");
 
-        Button vaciar = new Button(getTranslation("cliente.restaurante.cart.clear"), e -> {
+        Button vaciar = new Button("Vaciar", e -> {
             carritoService.clear(restauranteId);
             updateCarritoUI();
             closeSheet();
@@ -441,7 +421,7 @@ public class ClienteRestauranteView extends VerticalLayout implements BeforeEnte
         vaciar.addThemeVariants(ButtonVariant.LUMO_ERROR);
         makePointer(vaciar);
 
-        Button continuar = new Button(getTranslation("cliente.restaurante.cart.continue"), e ->
+        Button continuar = new Button("Continuar", e ->
                 UI.getCurrent().navigate("checkout/" + restauranteId)
         );
         continuar.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
@@ -501,11 +481,7 @@ public class ClienteRestauranteView extends VerticalLayout implements BeforeEnte
             return;
         }
 
-        String itemWord = (n == 1)
-                ? getTranslation("cliente.restaurante.cart.item.singular")
-                : getTranslation("cliente.restaurante.cart.item.plural");
-
-        resumen.setText(n + " " + itemWord + " · " + money().format(total));
+        resumen.setText(n + " item" + (n == 1 ? "" : "s") + " · " + eur.format(total));
 
         carritoBar.getStyle()
                 .set("opacity", "1")
@@ -520,10 +496,10 @@ public class ClienteRestauranteView extends VerticalLayout implements BeforeEnte
 
         List<CarritoService.Item> items = carritoService.items(restauranteId);
         if (items.isEmpty()) {
-            Span empty = new Span(getTranslation("cliente.restaurante.cart.empty"));
+            Span empty = new Span("Tu carrito está vacío.");
             empty.getStyle().set("opacity", "0.7");
             sheetList.add(empty);
-            sheetTotal.setText(getTranslation("cliente.restaurante.cart.totalLabel") + " " + money().format(BigDecimal.ZERO));
+            sheetTotal.setText("Total: " + eur.format(BigDecimal.ZERO));
             return;
         }
 
@@ -556,7 +532,7 @@ public class ClienteRestauranteView extends VerticalLayout implements BeforeEnte
             qtyBox.setAlignItems(Alignment.CENTER);
 
             BigDecimal precio = p.getPrecio() != null ? p.getPrecio() : BigDecimal.ZERO;
-            Span subtotal = new Span(money().format(precio.multiply(BigDecimal.valueOf(it.getCantidad()))));
+            Span subtotal = new Span(eur.format(precio.multiply(BigDecimal.valueOf(it.getCantidad()))));
             subtotal.getStyle().set("font-weight", "800");
 
             remove.addThemeVariants(ButtonVariant.LUMO_ERROR);
@@ -583,7 +559,7 @@ public class ClienteRestauranteView extends VerticalLayout implements BeforeEnte
             sheetList.add(row);
         }
 
-        sheetTotal.setText(getTranslation("cliente.restaurante.cart.totalLabel") + " " + money().format(carritoService.totalPrecio(restauranteId)));
+        sheetTotal.setText("Total: " + eur.format(carritoService.totalPrecio(restauranteId)));
     }
 
     private String safe(String s) {
