@@ -16,15 +16,30 @@ public class ProductoService {
         this.productoRepository = productoRepository;
     }
 
-    public List<Producto> productosDelRestaurante(Restaurante restaurante) {
-        return productoRepository.findByRestaurante(restaurante);
-    }
-    
-    public List<Producto> findByRestauranteId(Long restauranteId) {
-        return productoRepository.findByRestauranteId(restauranteId);
+    public List<Producto> findAll() {
+        return productoRepository.findAll();
     }
 
-    public Producto guardar(Producto producto) {
+    public Producto findById(Long id) {
+        if (id == null) return null;
+        return productoRepository.findById(id).orElse(null);
+    }
+
+    public List<Producto> productosDelRestaurante(Restaurante restaurante) {
+        if (restaurante == null) return List.of();
+        return productoRepository.findByRestaurante(restaurante);
+    }
+
+    public Producto save(Producto producto) {
+        if (producto == null) throw new IllegalArgumentException("Producto inválido");
         return productoRepository.save(producto);
+    }
+    public Producto guardar(Producto producto) {
+        return save(producto);
+    }
+
+    public void deleteById(Long id) {
+        if (id == null) return;
+        productoRepository.deleteById(id);
     }
 }

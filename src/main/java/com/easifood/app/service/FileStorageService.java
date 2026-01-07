@@ -19,6 +19,13 @@ public class FileStorageService {
     }
 
     // ==========================
+    // RESTAURANTES ✅ NUEVO
+    // ==========================
+    public String saveRestaurantImage(InputStream inputStream, String originalFilename) {
+        return saveImage(inputStream, originalFilename, "restaurantes");
+    }
+
+    // ==========================
     // PRODUCTOS
     // ==========================
     public String saveProductImage(InputStream inputStream, String originalFilename) {
