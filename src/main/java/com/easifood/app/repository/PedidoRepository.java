@@ -1,35 +1,48 @@
 package com.easifood.app.repository;
 
-import com.easifood.app.model.Pedido;
-import com.easifood.app.model.Empleado;
-import com.easifood.app.model.Restaurante;
 import com.easifood.app.model.Cliente;
-
+import com.easifood.app.model.Empleado;
+import com.easifood.app.model.Pedido;
+import com.easifood.app.model.Restaurante;
 import org.springframework.data.jpa.repository.JpaRepository;
-import java.util.Optional;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 public interface PedidoRepository extends JpaRepository<Pedido, Long> {
 
-    // Pedidos de un restaurante
-    List<Pedido> findByRestaurante(Restaurante restaurante);
-
-    // Pedidos asignados a un empleado (repartidor)
     List<Pedido> findByEmpleado(Empleado empleado);
 
-    // Pedidos de un cliente
-    List<Pedido> findByCliente(Cliente cliente);
-
-    // Pedidos por estado
-    List<Pedido> findByEstado(String estado);
-
-    List<Pedido> findByRestauranteAndFechaCreacionBetween(
-            Restaurante restaurante,
-            LocalDateTime inicio,
-            LocalDateTime fin
-    );
-
     List<Pedido> findByClienteOrderByFechaCreacionDesc(Cliente cliente);
+
     Optional<Pedido> findByIdAndCliente(Long id, Cliente cliente);
+
+    List<Pedido> findByRestauranteAndFechaCreacionBetween(Restaurante restaurante,
+                                                          LocalDateTime inicio,
+                                                          LocalDateTime fin);
+
+    // ✅ IMPORTANTE: para el detalle -> trae lineas + producto ya inicializados
+    @Query("""
+        select distinct p
+        from Pedido p
+        left join fetch p.lineas l
+        left join fetch l.producto pr
+        where p.id = :pedidoId
+          and p.cliente = :cliente
+    """)
+    Optional<Pedido> findByIdAndClienteWithLineas(@Param("pedidoId") Long pedidoId,
+                                                  @Param("cliente") Cliente cliente);
+
+    // ✅ Útil para updates (si quieres devolver el pedido ya "listo" también)
+    @Query("""
+        select distinct p
+        from Pedido p
+        left join fetch p.lineas l
+        left join fetch l.producto pr
+        where p.id = :pedidoId
+    """)
+    Optional<Pedido> findByIdWithLineas(@Param("pedidoId") Long pedidoId);
 }

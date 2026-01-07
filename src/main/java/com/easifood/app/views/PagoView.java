@@ -1,8 +1,11 @@
 package com.easifood.app.views;
 
+import com.easifood.app.model.Cliente;
+import com.easifood.app.model.Restaurante;
 import com.easifood.app.model.Usuario;
 import com.easifood.app.service.CarritoService;
 import com.easifood.app.service.PedidoService;
+import com.easifood.app.service.RestauranteService;
 import com.easifood.app.service.UsuarioService;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
@@ -26,6 +29,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.YearMonth;
+import java.util.List;
 
 @PageTitle("Pago")
 @Route("pago/:restauranteId")
@@ -35,6 +39,7 @@ public class PagoView extends VerticalLayout implements BeforeEnterObserver {
     private final PedidoService pedidoService;
     private final CarritoService carritoService;
     private final UsuarioService usuarioService;
+    private final RestauranteService restauranteService;
     private final AuthenticationContext authenticationContext;
 
     private Long restauranteId;
@@ -45,10 +50,12 @@ public class PagoView extends VerticalLayout implements BeforeEnterObserver {
     public PagoView(PedidoService pedidoService,
                     CarritoService carritoService,
                     UsuarioService usuarioService,
+                    RestauranteService restauranteService,
                     AuthenticationContext authenticationContext) {
         this.pedidoService = pedidoService;
         this.carritoService = carritoService;
         this.usuarioService = usuarioService;
+        this.restauranteService = restauranteService;
         this.authenticationContext = authenticationContext;
 
         setSizeFull();
@@ -60,7 +67,7 @@ public class PagoView extends VerticalLayout implements BeforeEnterObserver {
     }
 
     // ==========================
-    // HEADER (mismo estilo que Perfil / Checkout)
+    // HEADER
     // ==========================
     private Component buildHeader() {
         HorizontalLayout header = new HorizontalLayout();
@@ -85,9 +92,7 @@ public class PagoView extends VerticalLayout implements BeforeEnterObserver {
                 .set("letter-spacing", "0.5px")
                 .set("cursor", "pointer");
 
-        title.addClickListener(e ->
-                UI.getCurrent().navigate("home-cliente")
-        );
+        title.addClickListener(e -> UI.getCurrent().navigate("home-cliente"));
 
         Span subtitle = new Span("Pago");
         subtitle.getStyle().set("opacity", "0.7");
@@ -160,7 +165,11 @@ public class PagoView extends VerticalLayout implements BeforeEnterObserver {
         menu.addItem("Mi perfil", e -> UI.getCurrent().navigate("perfil"));
         menu.addItem("Cerrar sesión", e -> authenticationContext.logout());
 
-        return new HorizontalLayout(avatar);
+        HorizontalLayout wrap = new HorizontalLayout(avatar);
+        wrap.setPadding(false);
+        wrap.setSpacing(false);
+        wrap.setAlignItems(FlexComponent.Alignment.CENTER);
+        return wrap;
     }
 
     private Usuario getUsuarioActual() {
@@ -170,7 +179,7 @@ public class PagoView extends VerticalLayout implements BeforeEnterObserver {
     }
 
     // ==========================
-    // FORMULARIO
+    // FORM
     // ==========================
     private Component buildForm() {
         VerticalLayout wrap = new VerticalLayout();
@@ -224,23 +233,13 @@ public class PagoView extends VerticalLayout implements BeforeEnterObserver {
                 .withValidator(PagoView::validarCvv, "CVV inválido")
                 .bind(PagoData::getCvv, PagoData::setCvv);
 
-        // ==========================
-        // ACCIONES (Pagar arriba, Cancelar abajo, izquierda)
-        // ==========================
         Button pagar = new Button("Pagar", e -> pagar());
         pagar.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
-        pagar.getStyle()
-                .set("font-weight", "700")
-                .set("cursor", "pointer")
-                .set("min-width", "160px");
+        pagar.getStyle().set("font-weight", "700").set("cursor", "pointer").set("min-width", "160px");
 
         Button cancelar = new Button("Cancelar", e -> cancelarPago());
-
         cancelar.addThemeVariants(ButtonVariant.LUMO_TERTIARY);
-        cancelar.getStyle()
-                .set("cursor", "pointer")
-                .set("font-size", "0.9rem")
-                .set("opacity", "0.8");
+        cancelar.getStyle().set("cursor", "pointer").set("font-size", "0.9rem").set("opacity", "0.8");
 
         VerticalLayout actions = new VerticalLayout(pagar, cancelar);
         actions.setPadding(false);
@@ -271,10 +270,41 @@ public class PagoView extends VerticalLayout implements BeforeEnterObserver {
         if (!binder.validate().isOk()) return;
 
         try {
+            // 1) Items carrito
+            List<CarritoService.Item> items = carritoService.items(restauranteId);
+            if (items == null || items.isEmpty()) {
+                Notification.show("Tu carrito está vacío.");
+                UI.getCurrent().navigate("cliente-restaurante/" + restauranteId);
+                return;
+            }
+
+            // 2) Restaurante
+            Restaurante restaurante = restauranteService.findById(restauranteId);
+            if (restaurante == null) {
+                Notification.show("Restaurante no encontrado.");
+                UI.getCurrent().navigate("home-cliente");
+                return;
+            }
+
+            // 3) Cliente actual (por herencia)
+            Usuario u = usuarioService.obtenerUsuarioActual();
+            if (!(u instanceof Cliente)) {
+                Notification.show("No se pudo identificar al cliente.");
+                UI.getCurrent().navigate("home-cliente");
+                return;
+            }
+            Cliente cliente = (Cliente) u;
+
+            // 4) Crear pedido con líneas
             pedidoService.crearPedido(restauranteId, direccionEntrega);
+
+            // 5) Limpiar
+            carritoService.clear(restauranteId);
             VaadinSession.getCurrent().setAttribute("checkout_direccion", null);
+
             Notification.show("Pedido realizado", 2500, Notification.Position.BOTTOM_CENTER);
             UI.getCurrent().navigate("home-cliente?tab=pedidos");
+
         } catch (Exception ex) {
             Notification.show("No se pudo completar el pago");
         }
@@ -341,14 +371,8 @@ public class PagoView extends VerticalLayout implements BeforeEnterObserver {
             return;
         }
 
-        // Vaciar carrito del restaurante actual
         carritoService.clear(restauranteId);
-
-        // Limpiar dirección de checkout
         VaadinSession.getCurrent().setAttribute("checkout_direccion", null);
-
-        // Volver al restaurante
         UI.getCurrent().navigate("cliente-restaurante/" + restauranteId);
     }
-
 }

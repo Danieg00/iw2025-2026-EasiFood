@@ -6,8 +6,6 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.ArrayList;
 
-import com.easifood.app.model.PedidoProducto;
-
 @Entity
 @Table(name = "pedidos")
 public class Pedido {
@@ -42,14 +40,10 @@ public class Pedido {
     @OneToMany(mappedBy = "pedido", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<PedidoProducto> lineas = new ArrayList<>();
 
-    public List<PedidoProducto> getLineas() {
-        return lineas;
-    }
-
     // ✅ Constructor JPA
     public Pedido() {}
 
-    // ✅ Constructor que usa tu PedidoView (para que compile)
+    // ✅ Constructor que tú ya usabas (lo dejo)
     public Pedido(Empleado empleado, String direccionEntrega, String estado, LocalDateTime fechaCreacion) {
         this.empleado = empleado;
         this.direccionEntrega = direccionEntrega;
@@ -62,6 +56,41 @@ public class Pedido {
         if (fechaCreacion == null) fechaCreacion = LocalDateTime.now();
         if (estado == null || estado.isBlank()) estado = "PENDIENTE";
         if (total == null) total = BigDecimal.ZERO;
+    }
+
+    // =====================
+    // RELACIÓN: helpers
+    // =====================
+    public void addLinea(Producto producto, int cantidad) {
+        if (producto == null) throw new IllegalArgumentException("Producto no puede ser null");
+        if (cantidad <= 0) throw new IllegalArgumentException("Cantidad debe ser > 0");
+
+        PedidoProducto linea = new PedidoProducto(this, producto, cantidad);
+        this.lineas.add(linea);
+    }
+
+    public void addLinea(PedidoProducto linea) {
+        if (linea == null) return;
+        linea.setPedido(this);
+        this.lineas.add(linea);
+    }
+
+    public void removeLinea(PedidoProducto linea) {
+        if (linea == null) return;
+        this.lineas.remove(linea);
+        linea.setPedido(null);
+    }
+
+    public void clearLineas() {
+        for (PedidoProducto l : new ArrayList<>(lineas)) {
+            removeLinea(l);
+        }
+    }
+
+    public void recalcularTotal() {
+        this.total = lineas.stream()
+                .map(PedidoProducto::getSubtotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     // =====================
@@ -82,6 +111,8 @@ public class Pedido {
     public String getEstado() { return estado; }
 
     public LocalDateTime getFechaCreacion() { return fechaCreacion; }
+
+    public List<PedidoProducto> getLineas() { return lineas; }
 
     // =====================
     // SETTERS
