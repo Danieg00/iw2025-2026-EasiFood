@@ -83,7 +83,8 @@ public class GerenteHomeView extends VerticalLayout {
         this.usuarioService = usuarioService;
         this.pedidoService = pedidoService;
 
-        setSizeFull();
+        setWidthFull();
+        getStyle().set("min-height", "100vh");
         setPadding(true);
         setSpacing(true);
 
@@ -366,39 +367,106 @@ public class GerenteHomeView extends VerticalLayout {
     private void abrirEditorEmpleado(Empleado empleado) {
         Dialog dialog = new Dialog();
         dialog.setHeaderTitle(empleado.getId() == null ? "Nuevo Empleado" : "Editar Empleado");
+        dialog.setWidth("600px");
 
         // Formulario
         FormLayout formLayout = new FormLayout();
+        formLayout.setResponsiveSteps(new FormLayout.ResponsiveStep("0", 2));
         TextField nombreField = new TextField("Nombre");
+        TextField apellidosField = new TextField("Apellidos");
         TextField puestoField = new TextField("Puesto");
-        BigDecimalField salarioField = new BigDecimalField("Salario");
-        TextField imagenField = new TextField("URL Foto");
+        TextField correoField = new TextField("Correo Electrónico");
+        com.vaadin.flow.component.textfield.PasswordField contraField = new com.vaadin.flow.component.textfield.PasswordField("Contraseña");
+        if (empleado.getId() != null) {
+            contraField.setHelperText("Dejar vacía para no cambiarla si ya existe");
+        }
+        BigDecimalField salarioField = new BigDecimalField("Salario (€)");
+        salarioField.addThemeVariants(com.vaadin.flow.component.textfield.TextFieldVariant.LUMO_ALIGN_RIGHT);
 
-        formLayout.add(nombreField, puestoField, salarioField, imagenField);
+        Span labelImg = new Span("Foto de perfil");
+        labelImg.getStyle().set("font-size", "0.9rem").set("color", "gray");
+
+        Image preview = new Image();
+        preview.setWidth("100px");
+        preview.setHeight("100px");
+        preview.getStyle().set("object-fit", "cover").set("border-radius", "50%").set("background", "#f0f0f0");
+
+        if (empleado.getImagen() != null && !empleado.getImagen().isEmpty()) {
+            preview.setSrc(empleado.getImagen());
+        }
+
+        // Variable auxiliar para guardar la URL de la imagen subida
+        final String[] imagenUrlSubida = { empleado.getImagen() };
+
+        Upload upload = new Upload(UploadHandler.inMemory((metadata, bytes) -> {
+            if (bytes == null || bytes.length == 0) return;
+
+            // Guardamos la imagen usando tu servicio
+            String url = fileStorageService.saveProductImage(new ByteArrayInputStream(bytes), metadata.fileName());
+            imagenUrlSubida[0] = url;
+
+            // Actualizamos la previsualización
+            getUI().ifPresent(ui -> ui.access(() -> preview.setSrc(url)));
+        }));
+        upload.setAcceptedFileTypes("image/jpeg", "image/png", "image/webp");
+        upload.setMaxFiles(1);
+        upload.setDropLabel(new Span("Subir foto..."));
+
+        // Layout para la imagen (Upload + Preview)
+        HorizontalLayout imageLayout = new HorizontalLayout(preview, upload);
+        imageLayout.setAlignItems(Alignment.CENTER);
+
+        formLayout.add(nombreField, apellidosField);
+        formLayout.add(correoField, puestoField);
+        formLayout.add(salarioField, contraField);
+
+        formLayout.add(labelImg, imageLayout);
+        formLayout.setColspan(labelImg, 2);
+        formLayout.setColspan(imageLayout, 2);
 
         Binder<Empleado> binder = new Binder<>(Empleado.class);
 
         // Vinculación manual para seguridad
-        binder.forField(nombreField).bind(Empleado::getNombre, Empleado::setNombre);
-        binder.forField(puestoField).bind(Empleado::getPuesto, Empleado::setPuesto);
-        binder.forField(salarioField).bind(Empleado::getSalario, Empleado::setSalario);
-        binder.forField(imagenField).bind(Empleado::getImagen, Empleado::setImagen);
+        binder.forField(nombreField).asRequired("El nombre es obligatorio").bind(Empleado::getNombre, Empleado::setNombre);
+        binder.forField(apellidosField).asRequired("Los apellidos son obligatorios").bind(Empleado::getApellidos, Empleado::setApellidos);
+        binder.forField(correoField).asRequired("El correo es obligatorio").bind(Empleado::getCorreo, Empleado::setCorreo);
+        binder.forField(puestoField).asRequired("El puesto es obligatorio").bind(Empleado::getPuesto, Empleado::setPuesto);
+        binder.forField(salarioField).asRequired("El salario es obligatorio").bind(Empleado::getSalario, Empleado::setSalario);
         binder.readBean(empleado);
 
         Button guardar = new Button("Guardar", e -> {
             try {
                 binder.writeBean(empleado);
-                empleado.setRestaurante(restauranteActual); // Asegurar relación
+                if (imagenUrlSubida[0] != null) {
+                    empleado.setImagen(imagenUrlSubida[0]);
+                }
+
+                // IMPORTANTE: Asignar Restaurante y Rol si es nuevo
+                empleado.setRestaurante(restauranteActual);
+                if (empleado.getRole() == null || empleado.getRole().isEmpty()) {
+                    empleado.setRole("ROLE_EMPLEADO");
+                }
+                // Gestión de contraseña
+                String pass = contraField.getValue();
+                if (empleado.getId() == null && (pass == null || pass.isEmpty())) {
+                    Notification.show("La contraseña es obligatoria para nuevos empleados");
+                    return;
+                }
+                if (pass != null && !pass.isEmpty()) {
+                    // Encriptar contraseña aqui si no se hace solo
+                    empleado.setContra(pass);
+                }
                 empleadoRepository.save(empleado);
                 refrescarContenido();
                 dialog.close();
-                Notification.show("Empleado guardado");
+                Notification.show("Empleado guardado correctamente");
             } catch (Exception ex) {
                 Notification.show("Error al guardar datos");
             }
         });
         guardar.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
-        dialog.getFooter().add(new Button("Cancelar", e->dialog.close()), guardar);
+        Button cancelar = new Button("Cancelar", e -> dialog.close());
+        dialog.getFooter().add(cancelar, guardar);
         dialog.add(formLayout);
         dialog.open();
     }
@@ -775,8 +843,21 @@ public class GerenteHomeView extends VerticalLayout {
         headerStats.setAlignItems(Alignment.CENTER);
 
         H3 tituloStats = new H3("Panel de Control");
+        tituloStats.getStyle().set("margin", "0");
+
+        Div cajaTitulo = new Div(tituloStats);
+        cajaTitulo.getStyle().set("background", "rgba(255, 255, 255, 0.85)");
+        cajaTitulo.getStyle().set("padding", "10px 20px");
+        cajaTitulo.getStyle().set("border-radius", "10px");
+        cajaTitulo.getStyle().set("box-shadow", "0 2px 5px rgba(0,0,0,0.1)");
+
         Button btnCerrarCaja = new Button("Cerrar Caja (Día)", new Icon("lumo", "checkmark"));
         btnCerrarCaja.addThemeVariants(ButtonVariant.LUMO_SUCCESS);
+        Div cajaBoton = new Div(btnCerrarCaja);
+        cajaBoton.getStyle().set("background", "rgba(255, 255, 255, 0.85)"); // Blanco semitransparente
+        cajaBoton.getStyle().set("padding", "10px");
+        cajaBoton.getStyle().set("border-radius", "10px");
+        cajaBoton.getStyle().set("box-shadow", "0 2px 5px rgba(0,0,0,0.1)");
         btnCerrarCaja.addClickListener(e -> {
             // Creamos un diálogo de resumen usando los datos calculados al inicio
             Dialog reporte = new Dialog();
@@ -801,7 +882,7 @@ public class GerenteHomeView extends VerticalLayout {
             reporte.getFooter().add(new Button("Cancelar", ev -> reporte.close()), confirmar);
             reporte.open();
         });
-        headerStats.add(tituloStats, btnCerrarCaja);
+        headerStats.add(cajaTitulo, cajaBoton);
 
         HorizontalLayout kpiRow = new HorizontalLayout();
         kpiRow.setWidthFull();
