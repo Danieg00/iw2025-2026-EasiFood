@@ -103,12 +103,14 @@ public class EmpleadoView extends VerticalLayout {
         // Título de la sección
         H2 title = new H2("Pedidos Disponibles y En Curso");
         title.getStyle().set("color", "white").set("text-shadow", "0 2px 4px rgba(0,0,0,0.5)");
+        title.getStyle().set("text-align", "center").set("width", "100%");
 
         // Contenedor Flex para las tarjetas
         cardsContainer = new FlexLayout();
         cardsContainer.setFlexWrap(FlexLayout.FlexWrap.WRAP);
-        cardsContainer.setJustifyContentMode(JustifyContentMode.START);
+        cardsContainer.setJustifyContentMode(JustifyContentMode.CENTER);
         cardsContainer.getStyle().set("gap", "20px");
+        cardsContainer.getStyle().set("padding", "20px");
         cardsContainer.setWidthFull();
 
         actualizarListaPedidos();
@@ -145,7 +147,7 @@ public class EmpleadoView extends VerticalLayout {
     private Component crearCartaPedido(Pedido pedido) {
         // --- 1. Estructura de la Carta ---
         VerticalLayout card = new VerticalLayout();
-        card.setWidth("350px"); // Ancho fijo o min-width
+        card.setWidth("350px");
         card.setPadding(true);
         card.setSpacing(false);
         card.getStyle().set("background", "rgba(255, 255, 255, 0.95)");
@@ -184,18 +186,24 @@ public class EmpleadoView extends VerticalLayout {
         timeRow.setAlignItems(Alignment.CENTER);
         timeRow.getStyle().set("color", "#666").set("font-size", "0.9rem").set("margin-bottom", "15px");
 
-        // --- 4. Acciones (Botones y Selectores) ---
+        // --- 4. Lógica de Asignación y Acciones ---
         VerticalLayout actionsLayout = new VerticalLayout();
         actionsLayout.setPadding(false);
         actionsLayout.setSpacing(true);
 
-        // Lógica: Si NO tiene empleado asignado, mostrar botón "Asignarme".
-        // Si YA es mi pedido, mostrar selector de estado.
+        // OBTENEMOS EL EMPLEADO DEL PEDIDO
+        Empleado empPedido = pedido.getEmpleado();
 
-        boolean esMio = empleadoActual != null && empleadoActual.equals(pedido.getEmpleado());
-        boolean sinAsignar = pedido.getEmpleado() == null;
+        // LÓGICA CORREGIDA: Comparamos IDs, no objetos enteros
+        boolean esMio = false;
+        if (empleadoActual != null && empPedido != null) {
+            esMio = empleadoActual.getId().equals(empPedido.getId());
+        }
+
+        boolean sinAsignar = (empPedido == null);
 
         if (sinAsignar) {
+            // CASO 1: NADIE LO TIENE -> Botón para asignármelo
             Button btnAsignar = new Button("Asignarme Pedido", new Icon(VaadinIcon.TRUCK));
             btnAsignar.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
             btnAsignar.setWidthFull();
@@ -205,32 +213,41 @@ public class EmpleadoView extends VerticalLayout {
             actionsLayout.add(btnAsignar);
 
         } else if (esMio) {
-            // SELECTOR DE ESTADO
+            // CASO 2: ES MÍO -> Muestro el SELECTOR de Estados
+
+            Span asignadoA = new Span("Asignado a ti ✅");
+            asignadoA.getStyle().set("color", "green").set("font-weight", "bold").set("font-size", "0.9rem");
+
             Select<String> estadoSelect = new Select<>();
-            estadoSelect.setLabel("Actualizar Estado");
-            estadoSelect.setItems("PENDIENTE", "EN_PREPARACION", "EN_CAMINO", "ENTREGADO");
-            estadoSelect.setValue(pedido.getEstado());
+            estadoSelect.setLabel("Estado del pedido");
+            // Aquí definimos las opciones exactas que quieres
+            estadoSelect.setItems("PENDIENTE", "Preparando", "En Camino", "ENTREGADO");
+            estadoSelect.setValue(pedido.getEstado()); // Selecciona el actual
             estadoSelect.setWidthFull();
 
+            // Al cambiar el valor, actualizamos en BD
             estadoSelect.addValueChangeListener(event -> {
                 if(event.isFromClient()) {
                     cambiarEstadoPedido(pedido, event.getValue());
                 }
             });
 
-            // Estilo visual del empleado asignado
-            Span asignadoA = new Span("Asignado a ti ✅");
-            asignadoA.getStyle().set("color", "green").set("font-weight", "bold").set("font-size", "0.8rem");
-
             actionsLayout.add(asignadoA, estadoSelect);
 
         } else {
-            // Asignado a otro
-            Span asignadoOtro = new Span("Asignado a otro compañero");
-            asignadoOtro.getStyle().set("color", "red").set("font-size", "0.8rem");
-            actionsLayout.add(asignadoOtro);
+            // CASO 3: ES DE OTRO -> Muestro quién lo tiene
+            String nombreOtro = empPedido.getNombre();
+            Span asignadoOtro = new Span("Asignado a: " + nombreOtro);
+            asignadoOtro.getStyle().set("color", "red").set("font-weight", "bold").set("font-size", "0.9rem");
+
+            // Icono de candado o prohibido
+            HorizontalLayout infoOtro = new HorizontalLayout(new Icon(VaadinIcon.LOCK), asignadoOtro);
+            infoOtro.setAlignItems(Alignment.CENTER);
+
+            actionsLayout.add(infoOtro);
         }
 
+        // Botón común para ver productos
         Button btnVerProductos = new Button("Ver Productos", new Icon(VaadinIcon.LIST));
         btnVerProductos.setWidthFull();
         btnVerProductos.addClickListener(e -> abrirDialogProductos(pedido));
@@ -266,8 +283,8 @@ public class EmpleadoView extends VerticalLayout {
 
         switch (estado) {
             case "PENDIENTE": badge.getElement().getThemeList().add("error"); break; // Rojo
-            case "EN_PREPARACION": badge.getElement().getThemeList().add("contrast"); break; // Gris oscuro
-            case "EN_CAMINO": badge.getElement().getThemeList().add("primary"); break; // Azul
+            case "Preparando": badge.getElement().getThemeList().add("contrast"); break; // Gris oscuro
+            case "En Camino": badge.getElement().getThemeList().add("primary"); break; // Azul
             case "ENTREGADO": badge.getElement().getThemeList().add("success"); break; // Verde
         }
         return badge;
@@ -297,7 +314,8 @@ public class EmpleadoView extends VerticalLayout {
         // Menu contextual logout
         ContextMenu menu = new ContextMenu(avatar);
         menu.setOpenOnClick(true);
-        menu.addItem("Cerrar Sesión", e -> UI.getCurrent().getPage().setLocation("/login")); // Ajusta tu lógica de logout
+        menu.addItem("Mi Perfil", e -> getUI().ifPresent(ui -> ui.navigate("perfil")));
+        menu.addItem("Cerrar Sesión", e -> UI.getCurrent().getPage().setLocation("/login"));
 
         perfil.add(nombreSpan, avatar);
         header.add(logo, perfil);

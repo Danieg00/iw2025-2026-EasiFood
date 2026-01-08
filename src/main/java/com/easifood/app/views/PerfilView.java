@@ -2,6 +2,7 @@ package com.easifood.app.views;
 
 import com.easifood.app.model.Cliente;
 import com.easifood.app.model.Gerente;
+import com.easifood.app.model.Empleado;
 import com.easifood.app.model.Restaurante;
 import com.easifood.app.model.Usuario;
 import com.easifood.app.service.FileStorageService;
@@ -31,7 +32,7 @@ import jakarta.annotation.security.RolesAllowed;
 
 @PageTitle("Mi perfil")
 @Route("perfil")
-@RolesAllowed({"ROLE_CLIENTE", "ROLE_GERENTE"})
+@RolesAllowed({"ROLE_CLIENTE", "ROLE_GERENTE", "ROLE_EMPLEADO"})
 public class PerfilView extends VerticalLayout {
 
     private final UsuarioService usuarioService;
@@ -144,6 +145,8 @@ public class PerfilView extends VerticalLayout {
         // ==========================
         if (usuario instanceof Gerente g) {
             page.add(buildCardRestaurante(g.getRestaurante()));
+        } else if (usuario instanceof Empleado e) {
+            page.add(buildCardRestaurante(e.getRestaurante()));
         }
 
         add(page);
